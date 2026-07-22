@@ -136,6 +136,7 @@
   .presenca-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;
     animation:presencaDotPulse 1.8s ease-in-out infinite;}
   @keyframes presencaDotPulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+  .presenca-online-nomes{font-weight:500;font-size:11px;color:#0d9668;opacity:.85;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   /* Chat Interno */
   .chat-page-wrap{display:flex;flex-direction:column;}
   .chat-messages{display:flex;flex-direction:column;gap:14px;padding:6px 4px 16px;max-height:56vh;min-height:280px;overflow-y:auto;}
@@ -687,6 +688,12 @@
   .meta-produtos-list{margin-top:9px;display:flex;flex-direction:column;gap:6px;}
   .meta-produto-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
   .meta-produto-nome{font-size:12px;color:var(--pharm-700);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .meta-produto-contagem-btn{font-size:12px;font-weight:700;color:var(--pharm-700);background:var(--pharm-50);
+    border:1px solid var(--pharm-200);border-radius:7px;padding:2px 8px;cursor:pointer;flex-shrink:0;
+    font-family:inherit;transition:.12s;}
+  .meta-produto-contagem-btn:hover{background:var(--pharm-100);border-color:var(--pharm-300);}
+  .meta-row-count-btn{background:none;border:none;cursor:pointer;font-family:inherit;padding:2px 4px;border-radius:6px;}
+  .meta-row-count-btn:hover{background:var(--pharm-100);text-decoration:underline;}
   .recent-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;
     border-top:1px solid var(--pharm-100);}
   .recent-item:first-child{border-top:none;}
@@ -801,8 +808,9 @@
   /* Calendário Mensal Visual */
   .cal-pair{display:grid;grid-template-columns:1fr;gap:14px;max-width:620px;}
   @media (min-width:640px){.cal-pair{grid-template-columns:1fr 1fr;}}
-  .cal-carousel-3{max-width:820px;flex:1;min-width:0;}
-  @media (min-width:900px){.cal-carousel-3{grid-template-columns:1fr 1fr 1fr;}}
+  .cal-carousel-4{max-width:1100px;flex:1;min-width:0;}
+  @media (min-width:900px){.cal-carousel-4{grid-template-columns:1fr 1fr;max-width:820px;}}
+  @media (min-width:1200px){.cal-carousel-4{grid-template-columns:1fr 1fr 1fr 1fr;max-width:1100px;}}
   .cal-carousel-outer{width:100%;}
   .cal-carousel-row{display:flex;align-items:stretch;gap:14px;}
   .cal-nav-btn-grande{flex-shrink:0;align-self:center;display:flex;align-items:center;justify-content:center;
@@ -1053,6 +1061,23 @@
        fonte de pelo menos 16px em qualquer input/select/textarea */
     .input,.select,.textarea{font-size:16px;}
   }
+
+  /* Ecrãs estreitos (telemóvel) — linhas da Agenda e modais/tabelas em
+     geral: nunca deixar o nome do cliente/marcação cortado ou sobreposto
+     aos ícones de ação (ex: sino de aviso). */
+  @media (max-width:600px){
+    .modal-panel{padding:16px;border-radius:14px;max-height:92vh;}
+    .modal-title{font-size:14.5px;}
+
+    .agenda-slot-row{flex-wrap:wrap;gap:4px 8px;padding:10px;row-gap:6px;}
+    .agenda-slot-hora{width:auto;order:1;}
+    .row-actions{order:2;margin-left:auto;flex-wrap:wrap;justify-content:flex-end;gap:6px;}
+    .agenda-slot-label{order:3;flex-basis:100%;white-space:normal;overflow-wrap:anywhere;}
+
+    /* Cartões/linhas de tabela com ações à direita — nunca sobrepor texto */
+    .row-actions{gap:6px;}
+    table td, table th{padding:8px 6px;}
+  }
 </style>
 </head>
 <body>
@@ -1281,7 +1306,7 @@ let __datalistCounter = 0;
 const manipuladosSchema = [
   { name: 'nome', label: 'Nome do Cliente', type: 'text', col: 2 },
   { name: 'numCliente', label: 'Nº Cliente', type: 'text', size: 'xs' },
-  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm' },
+  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
   { name: 'data', label: 'Data', type: 'date', size: 'xs' },
   { name: 'fornecedor', label: 'Farmácia', type: 'combo', options: FORNECEDORES_MANIPULADOS, placeholder: 'Escrever ou escolher...', size: 'sm' },
   { name: 'previsao', label: 'Previsão', type: 'date', size: 'xs' },
@@ -1296,7 +1321,7 @@ const manipuladosSchema = [
 const ortopediaSchema = [
   { name: 'nome', label: 'Nome do Cliente', type: 'text', col: 2 },
   { name: 'numCliente', label: 'Nº Cliente', type: 'text', size: 'xs' },
-  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm' },
+  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
   { name: 'data', label: 'Data', type: 'date', size: 'xs' },
   { name: 'previsao', label: 'Previsão', type: 'date', size: 'xs' },
   { name: 'produto', label: 'Produto', type: 'select', options: ['Meias de Compressão', 'Ortótese / Outro'], size: 'sm' },
@@ -1318,7 +1343,7 @@ const ortopediaSchema = [
 const ervanariaSchema = [
   { name: 'nome', label: 'Nome do Cliente', type: 'text', col: 2 },
   { name: 'numCliente', label: 'Nº Cliente', type: 'text', size: 'xs' },
-  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm' },
+  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
   { name: 'data', label: 'Data', type: 'date', size: 'xs' },
   { name: 'fornecedor', label: 'Fornecedor', type: 'combo', options: ['Ervanário Portuense'], placeholder: 'Ex: Ervanário Portuense', size: 'sm' },
   { name: 'previsao', label: 'Previsão', type: 'date', size: 'xs' },
@@ -1333,7 +1358,7 @@ const ervanariaSchema = [
 const veterinariaSchema = [
   { name: 'nome', label: 'Nome do Cliente', type: 'text', col: 2 },
   { name: 'numCliente', label: 'Nº Cliente', type: 'text', size: 'xs' },
-  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm' },
+  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
   { name: 'data', label: 'Data', type: 'date', size: 'xs' },
   { name: 'fornecedor', label: 'Fornecedor', type: 'combo', options: ['Siloal'], placeholder: 'Ex: Siloal', size: 'sm' },
   { name: 'previsao', label: 'Previsão', type: 'date', size: 'xs' },
@@ -1348,7 +1373,7 @@ const veterinariaSchema = [
 const outrosSchema = [
   { name: 'nome', label: 'Nome do Cliente', type: 'text', col: 2 },
   { name: 'numCliente', label: 'Nº Cliente', type: 'text', size: 'xs' },
-  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm' },
+  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
   { name: 'data', label: 'Data', type: 'date', size: 'xs' },
   { name: 'fornecedor', label: 'Fornecedor', type: 'text', placeholder: 'Ex: Nome do fornecedor', size: 'sm' },
   { name: 'previsao', label: 'Previsão', type: 'date', size: 'xs' },
@@ -1530,12 +1555,12 @@ function buildOrcamentosPanel(listKey, draft, rerender, bloqueado) {
       fornInput = inp;
     }
 
-    const valorInput = h('input', { class: 'input', type: 'number', step: '0.01', placeholder: 'Valor €', disabled: bloqueado ? 'disabled' : undefined });
+    const valorInput = h('input', { class: 'input', type: 'number', step: '0.01', min: '0', placeholder: 'Valor €', disabled: bloqueado ? 'disabled' : undefined });
     valorInput.value = draft[vCampo] || '';
     valorInput.addEventListener('input', () => { draft[vCampo] = valorInput.value; });
 
     // Prazo: só se escreve o número — a unidade "Dias" é fixa.
-    const prazoInput = h('input', { class: 'input', type: 'number', step: '1', inputmode: 'numeric', placeholder: '0', disabled: bloqueado ? 'disabled' : undefined });
+    const prazoInput = h('input', { class: 'input', type: 'number', step: '1', min: '0', inputmode: 'numeric', placeholder: '0', disabled: bloqueado ? 'disabled' : undefined });
     prazoInput.value = draft[pCampo] || '';
     prazoInput.addEventListener('keydown', (e) => { if (e.key === '.' || e.key === ',' || e.key === '-') e.preventDefault(); });
     prazoInput.addEventListener('input', () => {
@@ -1589,8 +1614,8 @@ const errosSchema = [
   { name: 'data', label: 'Data', type: 'date', size: 'xs' },
   { name: 'produto', label: 'Produto', type: 'text', col: 2 },
   { name: 'cnp', label: 'CNP / Código', type: 'text', size: 'xs' },
-  { name: 'qtdFisica', label: 'Qtd. Física', type: 'number', integer: true, size: 'xs' },
-  { name: 'qtdSistema', label: 'Qtd. Sistema', type: 'number', integer: true, size: 'xs' },
+  { name: 'qtdFisica', label: 'Qtd. Física', type: 'number', integer: true, allowNegative: true, size: 'xs' },
+  { name: 'qtdSistema', label: 'Qtd. Sistema', type: 'number', integer: true, allowNegative: true, size: 'xs' },
   { name: 'obs', label: 'Observações', type: 'textarea', col: 2 },
 ];
 
@@ -1603,7 +1628,7 @@ const lembretesSchema = [
 const reclamacoesSchema = [
   { name: 'nome', label: 'Nome do Cliente', type: 'text', col: 2 },
   { name: 'numCliente', label: 'Nº Cliente', type: 'text', size: 'xs' },
-  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm' },
+  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
   { name: 'data', label: 'Data', type: 'date', size: 'xs' },
   { name: 'produto', label: 'Produto', type: 'text', size: 'sm' },
   { name: 'cnp', label: 'CNP / Código', type: 'text', size: 'xs' },
@@ -1618,7 +1643,7 @@ const marcacoesSchema = [
   { name: 'hora', label: 'Hora', type: 'text', placeholder: 'Ex: 10:00', size: 'xs' },
   { name: 'nomeCliente', label: 'Nome do Cliente', type: 'text', col: 2 },
   { name: 'nFicha', label: 'Nº Ficha', type: 'text', size: 'xs' },
-  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm' },
+  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
   { name: 'observacoes', label: 'Observações', type: 'textarea', col: 2 },
 ];
 
@@ -1694,7 +1719,7 @@ const mapa48hSchema = [
   { name: 'nomeCliente', label: 'Nome do Cliente', type: 'text', col: 2 },
   { name: 'nFicha', label: 'Nº Ficha', type: 'text', size: 'xs' },
   { name: 'nMapa', label: 'Nº Mapa', type: 'text', size: 'xs' },
-  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm' },
+  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
   { name: 'dataInicio', label: 'Data de Início', type: 'date', size: 'xs' },
   { name: 'dataFim', label: 'Data de Fim', type: 'date', size: 'xs' },
   { name: 'faturacao', label: 'Faturação', type: 'select', options: ['Sim', 'Não'], size: 'xs' },
@@ -1716,7 +1741,7 @@ const entregasSchema = [
   { name: 'nomeCliente', label: 'Nome do Cliente/Destinatário', type: 'text', col: 2 },
   { name: 'morada', label: 'Morada', type: 'text', col: 2 },
   { name: 'localidade', label: 'Localidade', type: 'text', size: 'sm' },
-  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm' },
+  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
   { name: 'dataEntrega', label: 'Data de Entrega', type: 'date', size: 'xs' },
   { name: 'blocoHorario', label: 'Bloco Horário', type: 'select', options: [...BLOCOS_HORARIOS, BLOCO_SABADO], size: 'sm' },
   { name: 'horaLimite', label: '🕒 Hora Limite Específica (opcional)', type: 'time', size: 'xs' },
@@ -1735,7 +1760,7 @@ const empresaParceiraSchema = [
   { name: 'nome', label: 'Nome da Empresa', type: 'text', col: 2 },
   { name: 'morada', label: 'Morada', type: 'text', col: 2 },
   { name: 'localidade', label: 'Localidade', type: 'text', size: 'sm' },
-  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm' },
+  { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
 ];
 // Sábado — usa meio-dia para evitar qualquer problema de fuso horário ao
 // interpretar uma data "YYYY-MM-DD" pura.
@@ -1808,6 +1833,10 @@ function agendaHorariosOcupados(horaInicio, duracaoMin) {
   if (idx === -1) return [horaInicio];
   return AGENDA_SLOTS_PADRAO.slice(idx, idx + agendaNumSlots(duracaoMin));
 }
+// Agrupamento simples de blocos de horário para o atalho de bloqueio em
+// massa — Manhã (até às 13h) / Tarde (a partir das 13h).
+function agendaPeriodoDoSlot(hora) { return hora < '13:00' ? 'Manhã' : 'Tarde'; }
+function agendaSlotsDoPeriodo(periodo) { return AGENDA_SLOTS_PADRAO.filter(s => agendaPeriodoDoSlot(s) === periodo); }
 // Verifica se uma nova marcação colide com alguma já existente do mesmo
 // prestador nesse dia (incluindo vagas bloqueadas). Devolve o registo em
 // conflito, ou null se o horário estiver livre.
@@ -1885,6 +1914,14 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
     if (created) { STATE.agendaDias = [created, ...STATE.agendaDias]; renderHeaderAcoes(); if (onSaved) onSaved(); }
     else showDbErrorToast('Não foi possível abrir o dia');
   }
+  // Abertura automática e silenciosa (sem popup de confirmação), disparada
+  // sempre que se cria uma marcação num dia ainda fechado — o dia passa a
+  // "Aberto" sem exigir um passo manual extra do utilizador.
+  async function abrirDiaAgendaSilencioso() {
+    if (agendaDiaAberto(prestadorKey, dateISO)) return;
+    const created = await dbInsert('agendaDias', { prestadorKey, data: dateISO, responsavel: currentUserName() });
+    if (created) { STATE.agendaDias = [created, ...STATE.agendaDias]; renderHeaderAcoes(); }
+  }
   function fecharDiaAgenda() {
     const registo = agendaDiaAbertoRegisto(prestadorKey, dateISO);
     if (!registo) return;
@@ -1948,6 +1985,7 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
     if (created) {
       STATE.agendaMarcacoes = [created, ...STATE.agendaMarcacoes];
       showForm = false;
+      await abrirDiaAgendaSilencioso();
       if (onSaved) onSaved();
       render();
     } else {
@@ -1956,11 +1994,46 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
     }
   }
 
+  // Devolve o conjunto contíguo de horários bloqueados (grelha padrão) que
+  // inclui `hora` — usado para detetar quando 3 vagas seguidas ficam
+  // bloqueadas e sugerir o bloqueio do bloco completo (Manhã/Tarde).
+  function agendaRunBloqueadoContendo(hora) {
+    const bloqueados = new Set(marcacoesDoDia().filter(m => m.tipoLinha === 'bloqueado').map(m => m.hora));
+    const idx = AGENDA_SLOTS_PADRAO.indexOf(hora);
+    if (idx === -1) return [hora];
+    let ini = idx, fim = idx;
+    while (ini > 0 && bloqueados.has(AGENDA_SLOTS_PADRAO[ini - 1])) ini -= 1;
+    while (fim < AGENDA_SLOTS_PADRAO.length - 1 && bloqueados.has(AGENDA_SLOTS_PADRAO[fim + 1])) fim += 1;
+    return AGENDA_SLOTS_PADRAO.slice(ini, fim + 1);
+  }
+  async function bloquearBlocoCompleto(periodo) {
+    const ocupadas = new Set(marcacoesDoDia().map(m => m.hora));
+    const porBloquear = agendaSlotsDoPeriodo(periodo).filter(hora => !ocupadas.has(hora));
+    if (!porBloquear.length) return;
+    const criados = await Promise.all(porBloquear.map(hora =>
+      dbInsert('agendaMarcacoes', { prestadorKey, data: dateISO, hora, duracaoMin: 15, tipoLinha: 'bloqueado', responsavel: currentUserName() })
+    ));
+    const validos = criados.filter(Boolean);
+    if (validos.length) { STATE.agendaMarcacoes = [...validos, ...STATE.agendaMarcacoes]; if (onSaved) onSaved(); render(); }
+    if (validos.length < porBloquear.length) showDbErrorToast('Algumas vagas do bloco não puderam ser bloqueadas');
+  }
   function bloquearVaga(hora) {
     confirmDialog('Tem a certeza de que pretende bloquear esta vaga?', async () => {
       const created = await dbInsert('agendaMarcacoes', { prestadorKey, data: dateISO, hora, duracaoMin: 15, tipoLinha: 'bloqueado', responsavel: currentUserName() });
-      if (created) { STATE.agendaMarcacoes = [created, ...STATE.agendaMarcacoes]; if (onSaved) onSaved(); render(); }
-      else showDbErrorToast('Não foi possível bloquear a vaga');
+      if (created) {
+        STATE.agendaMarcacoes = [created, ...STATE.agendaMarcacoes];
+        if (onSaved) onSaved();
+        render();
+        const run = agendaRunBloqueadoContendo(hora);
+        if (run.length === 3) {
+          const periodo = agendaPeriodoDoSlot(hora);
+          confirmDialog(
+            `Bloqueou 3 vagas consecutivas. Deseja bloquear o bloco completo de horário (${periodo})? Esta ação vai impedir novas marcações em todo esse período — pode sempre desbloquear vaga a vaga individualmente mais tarde.`,
+            () => bloquearBlocoCompleto(periodo),
+            { confirmLabel: `Bloquear Bloco da ${periodo}` }
+          );
+        }
+      } else showDbErrorToast('Não foi possível bloquear a vaga');
     });
   }
   function desbloquearVaga(m) {
@@ -2039,9 +2112,13 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
     nomeInput.value = formDraft.nomeCliente || '';
     nomeInput.addEventListener('input', () => { formDraft.nomeCliente = nomeInput.value; });
 
-    const contactoInput = h('input', { class: 'input', placeholder: 'Contacto' });
+    const contactoInput = h('input', { class: 'input', placeholder: 'Contacto (9 dígitos)', inputmode: 'numeric', pattern: '[0-9]{9}', maxlength: '9' });
     contactoInput.value = formDraft.contacto || '';
-    contactoInput.addEventListener('input', () => { formDraft.contacto = contactoInput.value; });
+    contactoInput.addEventListener('input', () => {
+      const cleaned = contactoInput.value.replace(/\D/g, '').slice(0, 9);
+      if (cleaned !== contactoInput.value) contactoInput.value = cleaned;
+      formDraft.contacto = contactoInput.value;
+    });
 
     const obsInput = h('input', { class: 'input', placeholder: 'Observações' });
     obsInput.value = formDraft.observacoes || '';
@@ -2320,8 +2397,8 @@ function buildCalendarioCarrossel(onDayClick, prestadorKey) {
   function render() {
     clear(wrap);
     const hoje = new Date();
-    const posicoes = ['passado', 'atual', 'futuro'];
-    const meses = [-1, 0, 1].map((i, idx) => {
+    const posicoes = ['passado', 'atual', 'futuro', 'futuro'];
+    const meses = [-1, 0, 1, 2].map((i, idx) => {
       const d = new Date(hoje.getFullYear(), hoje.getMonth() + offset + i, 1);
       return buildMonthCalendar(d.getFullYear(), d.getMonth(), posicoes[idx], onDayClick, prestadorKey);
     });
@@ -2333,7 +2410,7 @@ function buildCalendarioCarrossel(onDayClick, prestadorKey) {
 
     wrap.appendChild(h('div', { class: 'cal-carousel-row' }, [
       prevBtn,
-      h('div', { class: 'cal-pair cal-carousel-3' }, meses),
+      h('div', { class: 'cal-pair cal-carousel-4' }, meses),
       nextBtn,
     ]));
   }
@@ -2654,12 +2731,33 @@ const TABLES = {
 
 function camelToSnake(s) { return s.replace(/[A-Z]/g, m => '_' + m.toLowerCase()); }
 function snakeToCamel(s) { return s.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase()); }
+// Converte qualquer valor devolvido pelo Supabase para um objeto/array JSON
+// puro (sem protótipos, getters, Symbols ou outras propriedades não
+// serializáveis) através de uma ida-e-volta por JSON.parse(JSON.stringify(...)).
+// Necessário porque, nalguns ambientes/browsers, a resposta do cliente
+// supabase-js pode vir "amarrada" a objetos internos não clonáveis — o que
+// provoca "DataCloneError: The object can not be cloned" assim que a app
+// tenta guardar esses dados no STATE (ex: ao clonar/comparar para o
+// re-render, ou em qualquer estrutura que use structured clone). Sanitizar
+// aqui, mesmo antes dos dados chegarem ao STATE, remove esse risco de vez.
+function sanitizarSupabase(valor) {
+  if (valor === null || valor === undefined) return valor;
+  try {
+    return JSON.parse(JSON.stringify(valor));
+  } catch (e) {
+    console.warn('[Supabase] falha ao sanitizar dados recebidos (a usar valor original):', e);
+    return valor;
+  }
+}
 function rowToRecord(row) {
   const out = {};
   if (!row || typeof row !== 'object') return out;
+  // Sanitiza a linha para um objeto JSON puro antes de a mapear — garante
+  // que nunca guardamos no STATE nada que não seja clonável.
+  const limpo = sanitizarSupabase(row);
   // Object.keys (em vez de for...in) garante que só olhamos para propriedades
   // próprias da linha devolvida pelo Supabase — nunca para propriedades herdadas.
-  Object.keys(row).forEach((k) => { out[snakeToCamel(k)] = row[k]; });
+  Object.keys(limpo).forEach((k) => { out[snakeToCamel(k)] = limpo[k]; });
   return out;
 }
 function recordToRow(record) {
@@ -2700,7 +2798,7 @@ async function dbFetchAll(listKey) {
       : sb.from(TABLES[listKey]).select('*').eq('eliminado', false).order('id', { ascending: false });
     const { data, error } = await query;
     if (error) { lastDbError = error.message; console.error(`[Supabase] erro ao ler ${listKey}:`, error.message); return []; }
-    return (data || []).map(rowToRecord);
+    return sanitizarSupabase(data || []).map(rowToRecord);
   } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao ler ${listKey}:`, e); return []; }
 }
 async function dbFetchDeleted(listKey) {
@@ -2708,7 +2806,7 @@ async function dbFetchDeleted(listKey) {
   try {
     const { data, error } = await sb.from(TABLES[listKey]).select('*').eq('eliminado', true).order('data_eliminacao', { ascending: false });
     if (error) { lastDbError = error.message; console.error(`[Supabase] erro ao ler lixo de ${listKey}:`, error.message); return []; }
-    return (data || []).map(rowToRecord);
+    return sanitizarSupabase(data || []).map(rowToRecord);
   } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao ler lixo de ${listKey}:`, e); return []; }
 }
 // Apagamento definitivo e irreversível — nunca disponível fora do Lixo, e
@@ -2758,6 +2856,18 @@ async function dbDelete(listKey, id) {
 // deixar registos "presos" sem o utilizador perceber porquê.
 async function bulkSoftDelete(listKey, ids) {
   const resultados = await Promise.all(ids.map(id => dbDelete(listKey, id)));
+  const apagados = new Set(ids.filter((id, i) => resultados[i]));
+  if (apagados.size < ids.length) {
+    const falhas = ids.length - apagados.size;
+    showDbErrorToast(falhas === 1 ? 'Não foi possível eliminar 1 dos registos selecionados' : `Não foi possível eliminar ${falhas} dos registos selecionados`);
+  }
+  return apagados;
+}
+// Elimina em lote (bulk) em definitivo — usado apenas para Utilizadores, para
+// que o Username numérico fique imediatamente livre para novo registo
+// (soft delete deixaria o username "preso" ao registo eliminado no Lixo).
+async function bulkHardDelete(listKey, ids) {
+  const resultados = await Promise.all(ids.map(id => dbPermanentDelete(listKey, id)));
   const apagados = new Set(ids.filter((id, i) => resultados[i]));
   if (apagados.size < ids.length) {
     const falhas = ids.length - apagados.size;
@@ -3320,6 +3430,7 @@ function buildField(field, draft) {
     control = h('input', {
       class: 'input', type: 'number', step: '1', inputmode: 'numeric',
       placeholder: field.placeholder || '0',
+      min: field.allowNegative ? undefined : '0',
     });
     control.value = draft[field.name] || '';
     control.addEventListener('keydown', (e) => {
@@ -3354,6 +3465,7 @@ function buildField(field, draft) {
     control = h('input', {
       class: 'input', type: field.type, step: field.type === 'number' ? (field.step || '0.01') : undefined,
       placeholder: field.placeholder || '', inputmode: field.inputmode || undefined, pattern: field.pattern || undefined,
+      min: (field.type === 'number' && !field.allowNegative) ? '0' : undefined,
     });
     control.value = draft[field.name] || '';
     control.addEventListener('input', () => {
@@ -4058,6 +4170,53 @@ async function ajustarProdutoObjetivo(objetivo, produtoIdx, delta, onSaved) {
   if (updated) { STATE.objetivos = STATE.objetivos.map(o => o.id === objetivo.id ? updated : o); onSaved(); }
   else showDbErrorToast('Não foi possível atualizar o produto');
 }
+// Define diretamente o número exato de unidades vendidas de um produto do
+// objetivo (em vez de incrementar/decrementar de 1 em 1) — usado pelo popup
+// de edição rápida que abre ao clicar no badge "X / Y un.".
+async function definirProdutoObjetivo(objetivo, produtoIdx, novoValor, onSaved) {
+  const produtos = objetivoProdutos(objetivo).map((p, i) => {
+    if (i !== produtoIdx) return p;
+    return Object.assign({}, p, { atual: String(Math.max(0, novoValor)) });
+  });
+  const updated = await dbUpdate('objetivos', objetivo.id, { produtos });
+  if (updated) { STATE.objetivos = STATE.objetivos.map(o => o.id === objetivo.id ? updated : o); onSaved(); }
+  else showDbErrorToast('Não foi possível atualizar o produto');
+}
+// Popup pequeno para introduzir diretamente o número atualizado de unidades
+// vendidas — mais rápido do que clicar várias vezes em +1/-1.
+function abrirModalEdicaoUnidades(objetivo, produtoIdx, onSaved) {
+  const produto = objetivoProdutos(objetivo)[produtoIdx];
+  if (!produto) return;
+  const overlay = h('div', { class: 'modal-overlay' });
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
+
+  const input = h('input', { class: 'input', type: 'number', min: '0', inputmode: 'numeric' });
+  input.value = String(Math.round(parseFloat(produto.atual) || 0));
+
+  function guardar() {
+    const novoValor = Math.max(0, Math.round(parseFloat(input.value) || 0));
+    close();
+    definirProdutoObjetivo(objetivo, produtoIdx, novoValor, onSaved);
+  }
+  const saveBtn = h('button', { class: 'btn btn-primary', onclick: guardar }, 'Guardar');
+  const cancelBtn = h('button', { class: 'btn btn-secondary', onclick: close }, 'Cancelar');
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') guardar(); });
+
+  const panel = h('div', { class: 'modal-panel confirm-panel' }, [
+    h('p', { class: 'modal-title', style: 'margin-bottom:12px;' }, `${produto.nome || 'Produto'} — Unidades Vendidas`),
+    h('div', { class: 'field' }, [
+      h('label', {}, `Meta: ${Math.round(parseFloat(produto.meta) || 0)} un.`),
+      input,
+    ]),
+    h('div', { class: 'form-actions' }, [saveBtn, cancelBtn]),
+  ]);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  setTimeout(() => { input.focus(); input.select(); }, 50);
+}
 
 // Cartão "Objetivos Ativos" da Página Inicial — lista dinamicamente todas as
 // metas em estado "Ativo" (Equipa > Objetivos), agrupadas por Título/Marca,
@@ -4072,15 +4231,26 @@ function buildMetasAtivasCard(onSaved) {
       minusBtn.addEventListener('click', (e) => { e.stopPropagation(); requireAuth(() => ajustarProdutoObjetivo(o, idx, -1, onSaved)); });
       const plusBtn = h('button', { class: 'btn-fab-sm tone-green', title: 'Adicionar 1 unidade', 'aria-label': 'Adicionar 1 unidade' }, Icon('plus', { size: 12, strokeWidth: 2.6 }));
       plusBtn.addEventListener('click', (e) => { e.stopPropagation(); requireAuth(() => ajustarProdutoObjetivo(o, idx, 1, onSaved)); });
+      const contagemBtn = h('button', {
+        class: 'meta-produto-contagem-btn', title: 'Clicar para introduzir o número exato de unidades',
+      }, `${Math.round(parseFloat(p.atual) || 0)}/${Math.round(parseFloat(p.meta) || 0)} un.`);
+      contagemBtn.addEventListener('click', (e) => { e.stopPropagation(); requireAuth(() => abrirModalEdicaoUnidades(o, idx, onSaved)); });
       return h('div', { class: 'meta-produto-row' }, [
-        h('span', { class: 'meta-produto-nome' }, `${p.nome || '—'}: ${Math.round(parseFloat(p.atual) || 0)}/${Math.round(parseFloat(p.meta) || 0)} un.`),
-        h('div', { style: 'display:flex;gap:4px;flex-shrink:0;' }, [minusBtn, plusBtn]),
+        h('span', { class: 'meta-produto-nome' }, `${p.nome || '—'}:`),
+        contagemBtn,
+        h('div', { style: 'display:flex;gap:4px;flex-shrink:0;margin-left:auto;' }, [minusBtn, plusBtn]),
       ]);
     });
     return h('div', { class: 'meta-row' }, [
       h('div', { class: 'meta-row-top' }, [
         h('span', { class: 'meta-row-title' }, o.titulo || '—'),
-        h('span', { class: 'meta-row-count' }, objetivoFormatarProgresso(o)),
+        objetivoProdutos(o).length === 1
+          ? (() => {
+              const totalBtn = h('button', { class: 'meta-row-count meta-row-count-btn', title: 'Clicar para introduzir o número exato de unidades' }, objetivoFormatarProgresso(o));
+              totalBtn.addEventListener('click', (e) => { e.stopPropagation(); requireAuth(() => abrirModalEdicaoUnidades(o, 0, onSaved)); });
+              return totalBtn;
+            })()
+          : h('span', { class: 'meta-row-count' }, objetivoFormatarProgresso(o)),
       ]),
       buildProgressBar(pct),
       h('div', { class: 'meta-produtos-list' }, produtosEl),
@@ -4809,7 +4979,7 @@ function formatPercent(v) {
 
 function calcInputField(label, defaultValue, span2) {
   const input = h('input', {
-    class: 'calc-input', type: 'number', step: '0.01', inputmode: 'decimal',
+    class: 'calc-input', type: 'number', step: '0.01', min: '0', inputmode: 'decimal',
     placeholder: '0,00',
   });
   input.value = (defaultValue === undefined || defaultValue === null || defaultValue === '') ? '' : String(defaultValue);
@@ -5479,8 +5649,8 @@ function buildEventoCalendarioCarrossel(tipo, onDayClick) {
   function render() {
     clear(wrap);
     const hoje = new Date();
-    const posicoes = ['passado', 'atual', 'futuro'];
-    const meses = [-1, 0, 1].map((i, idx) => {
+    const posicoes = ['passado', 'atual', 'futuro', 'futuro'];
+    const meses = [-1, 0, 1, 2].map((i, idx) => {
       const d = new Date(hoje.getFullYear(), hoje.getMonth() + offset + i, 1);
       return buildEventoMonthCalendar(tipo, d.getFullYear(), d.getMonth(), posicoes[idx], onDayClick);
     });
@@ -5488,7 +5658,7 @@ function buildEventoCalendarioCarrossel(tipo, onDayClick) {
     prevBtn.addEventListener('click', () => { offset -= 1; render(); });
     const nextBtn = h('button', { class: 'cal-nav-btn-grande', title: 'Avançar um mês', 'aria-label': 'Avançar um mês' }, Icon('arrowright', { size: 24, strokeWidth: 2.6 }));
     nextBtn.addEventListener('click', () => { offset += 1; render(); });
-    wrap.appendChild(h('div', { class: 'cal-carousel-row' }, [prevBtn, h('div', { class: 'cal-pair cal-carousel-3' }, meses), nextBtn]));
+    wrap.appendChild(h('div', { class: 'cal-carousel-row' }, [prevBtn, h('div', { class: 'cal-pair cal-carousel-4' }, meses), nextBtn]));
   }
   render();
   return wrap;
@@ -5882,9 +6052,13 @@ function buildEventoDiaModal(tipo, dateISO, evento, onSaved) {
     const fichaInput = h('input', { class: 'input', placeholder: 'Nº Ficha' });
     fichaInput.value = formDraft.nFicha || '';
     fichaInput.addEventListener('input', () => { formDraft.nFicha = fichaInput.value; });
-    const contactoInput = h('input', { class: 'input', placeholder: 'Contacto' });
+    const contactoInput = h('input', { class: 'input', placeholder: 'Contacto (9 dígitos)', inputmode: 'numeric', pattern: '[0-9]{9}', maxlength: '9' });
     contactoInput.value = formDraft.contacto || '';
-    contactoInput.addEventListener('input', () => { formDraft.contacto = contactoInput.value; });
+    contactoInput.addEventListener('input', () => {
+      const cleaned = contactoInput.value.replace(/\D/g, '').slice(0, 9);
+      if (cleaned !== contactoInput.value) contactoInput.value = cleaned;
+      formDraft.contacto = contactoInput.value;
+    });
     const obsInput = h('input', { class: 'input', placeholder: 'Observações' });
     obsInput.value = formDraft.observacoes || '';
     obsInput.addEventListener('input', () => { formDraft.observacoes = obsInput.value; });
@@ -6991,9 +7165,13 @@ function buildDeclaracaoDespesasPage(container, goTo) {
     const nomeInput = h('input', { class: 'input' });
     nomeInput.value = draft.nomeUtente;
     nomeInput.addEventListener('input', () => { draft.nomeUtente = nomeInput.value; });
-    const ccInput = h('input', { class: 'input' });
+    const ccInput = h('input', { class: 'input', inputmode: 'numeric', pattern: '[0-9]{8}', maxlength: '8', placeholder: '8 dígitos' });
     ccInput.value = draft.ccUtente;
-    ccInput.addEventListener('input', () => { draft.ccUtente = ccInput.value; });
+    ccInput.addEventListener('input', () => {
+      const cleaned = ccInput.value.replace(/\D/g, '').slice(0, 8);
+      if (cleaned !== ccInput.value) ccInput.value = cleaned;
+      draft.ccUtente = ccInput.value;
+    });
     const discCb = h('input', { type: 'checkbox', checked: !!draft.discriminado });
     discCb.addEventListener('change', () => { draft.discriminado = discCb.checked; rerender(); });
 
@@ -7004,7 +7182,7 @@ function buildDeclaracaoDespesasPage(container, goTo) {
     ];
     const linhaCheckbox = h('label', { class: 'checkbox-field', style: 'margin-top:14px;' }, [discCb, h('span', {}, 'Discriminar Medicamentos / Produtos')]);
     if (!draft.discriminado) {
-      const valorInput = h('input', { class: 'input', type: 'number', step: '0.01', placeholder: '0,00' });
+      const valorInput = h('input', { class: 'input', type: 'number', step: '0.01', min: '0', placeholder: '0,00' });
       valorInput.value = draft.valorTotalManual;
       valorInput.addEventListener('input', () => { draft.valorTotalManual = valorInput.value; });
       campos.push(h('div', { class: 'field doc-w-40' }, [h('label', {}, 'Valor Total (€)'), valorInput]));
@@ -7016,7 +7194,7 @@ function buildDeclaracaoDespesasPage(container, goTo) {
         const nomeProdInput = h('input', { class: 'input doc-item-nome', placeholder: 'Nome do Produto' });
         nomeProdInput.value = it.nome;
         nomeProdInput.addEventListener('input', () => { it.nome = nomeProdInput.value; });
-        const precoInput = h('input', { class: 'input doc-item-preco', type: 'number', step: '0.01', placeholder: 'Preço €' });
+        const precoInput = h('input', { class: 'input doc-item-preco', type: 'number', step: '0.01', min: '0', placeholder: 'Preço €' });
         precoInput.value = it.preco;
         precoInput.addEventListener('input', () => { it.preco = precoInput.value; totalLabel.textContent = `Total: ${calcularTotal().toFixed(2).replace('.', ',')} €`; });
         const delBtn = h('button', { class: 'btn-fab-sm tone-red', title: 'Remover', 'aria-label': 'Remover' }, Icon('trash', { size: 12, strokeWidth: 2.2 }));
@@ -7604,7 +7782,7 @@ async function gerarBackupCompleto() {
     try {
       const { data, error } = await sb.from(tabela).select('*');
       if (error) return [key, { erro: error.message }];
-      return [key, data || []];
+      return [key, sanitizarSupabase(data || [])];
     } catch (e) {
       return [key, { erro: String(e && e.message ? e.message : e) }];
     }
@@ -7771,7 +7949,7 @@ function buildDefinicoesPage(container, goTo) {
     }
     const plural = ids.length > 1;
     confirmDialog(`ATENÇÃO: Tem a certeza de que quer eliminar permanentemente ${ids.length} utilizador${plural ? 'es' : ''} selecionado${plural ? 's' : ''}? Esta ação não pode ser desfeita!`, async () => {
-      const apagados = await bulkSoftDelete('usuarios', ids);
+      const apagados = await bulkHardDelete('usuarios', ids);
       STATE.usuarios = STATE.usuarios.filter(u => !apagados.has(u.id));
       selectedIds = new Set([...selectedIds].filter(id => !apagados.has(id)));
       rerender();
@@ -7844,7 +8022,7 @@ function buildDefinicoesPage(container, goTo) {
         editing: !!editingId, onSubmit: submit, onCancel: cancel, errorMessage: formError, saving,
         onDelete: (editingId && !editingSelf && !isAdminFundador(editingAlvo)) ? () => {
           confirmDialog('ATENÇÃO: Tem a certeza de que quer eliminar permanentemente este utilizador? Esta ação não pode ser desfeita!', async () => {
-            const ok = await dbDelete('usuarios', editingId);
+            const ok = await dbPermanentDelete('usuarios', editingId);
             if (ok) { STATE.usuarios = STATE.usuarios.filter(u => u.id !== editingId); selectedIds = new Set(); showForm = false; rerender(); }
             else showDbErrorToast('Não foi possível eliminar o utilizador');
           }, { danger: true, confirmLabel: 'Eliminar' });
@@ -10171,7 +10349,7 @@ function iniciarPresenca() {
   presenceChannel = sb.channel('presenca-equipa', { config: { presence: { key: String(activeUser.id) } } });
   presenceChannel.on('presence', { event: 'sync' }, () => {
     const estado = presenceChannel.presenceState();
-    STATE.utilizadoresOnline = Object.values(estado).map(arr => arr[0]).filter(Boolean);
+    STATE.utilizadoresOnline = sanitizarSupabase(Object.values(estado).map(arr => arr[0]).filter(Boolean));
     refreshSidebarBadges();
     if (STATE.page === 'home' || STATE.page === 'chat') render();
   });
@@ -10189,10 +10367,12 @@ function pararPresenca() {
 function buildUtilizadoresOnlineBadge() {
   const lista = (STATE.utilizadoresOnline || []).filter(u => !activeUser || String(u.userId) !== String(activeUser.id));
   if (!lista.length) return null;
-  const nomes = lista.map(u => u.nome).join(', ');
-  return h('span', { class: 'presenca-online-badge', title: `Online agora: ${nomes}` }, [
+  const primeirosNomes = lista.map(u => String(u.nome || '').trim().split(/\s+/)[0]).filter(Boolean);
+  const nomesCompletos = lista.map(u => u.nome).join(', ');
+  return h('span', { class: 'presenca-online-badge', title: `Online agora: ${nomesCompletos}` }, [
     h('span', { class: 'presenca-dot' }),
     `${lista.length} online`,
+    primeirosNomes.length ? h('span', { class: 'presenca-online-nomes' }, `: ${primeirosNomes.join(', ')}`) : null,
   ]);
 }
 
@@ -10521,4 +10701,3 @@ if (readStoredAuth()) {
 </script>
 </body>
 </html>
-
