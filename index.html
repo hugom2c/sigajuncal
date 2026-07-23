@@ -1802,9 +1802,7 @@ const mapa48hSchema = [
   { name: 'nFicha', label: 'Nº Ficha', type: 'text', size: 'xs' },
   { name: 'nMapa', label: 'Nº Mapa (opcional — pode preencher mais tarde)', type: 'text', size: 'xs' },
   { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
-  { name: 'dataInicio', label: 'Data de Início', type: 'date', size: 'xs' },
-  { name: 'dataFim', label: 'Data de Fim', type: 'date', size: 'xs' },
-  { name: 'faturacao', label: 'Faturação', type: 'select', options: ['Sim', 'Não'], size: 'xs' },
+  { name: 'dataInicio', label: 'Data de Início', type: 'date', size: 'xs', blockPast: true },
   { name: 'avisado', label: 'Avisado', type: 'select', options: ['Sim', 'Não'], size: 'xs' },
   { name: 'estadoEntrega', label: 'Estado', type: 'select', options: ['Já entregou', 'Pendente'], size: 'sm' },
   { name: 'dataLeitura', label: 'Data de Leitura', type: 'date', size: 'xs' },
@@ -1823,7 +1821,7 @@ const entregasSchema = [
   { name: 'morada', label: 'Morada', type: 'text', col: 2 },
   { name: 'localidade', label: 'Localidade', type: 'text', size: 'sm' },
   { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
-  { name: 'dataEntrega', label: 'Data de Entrega', type: 'date', size: 'xs' },
+  { name: 'dataEntrega', label: 'Data de Entrega', type: 'date', size: 'xs', blockPast: true },
   { name: 'blocoHorario', label: 'Bloco Horário', type: 'select', options: [...BLOCOS_HORARIOS, BLOCO_SABADO], size: 'sm' },
   { name: 'horaLimite', label: '🕒 Hora Limite Específica (opcional)', type: 'time', size: 'xs' },
   { name: 'urgente', label: 'URGENTE — Entrega Imediata', type: 'checkbox' },
@@ -2933,6 +2931,11 @@ function recordToRow(record) {
   Object.keys(record).forEach((k) => {
     if (k === 'id') return;
     let v = record[k];
+    // Remove espaços acidentais no início/fim de qualquer texto (nomes de
+    // utentes, produtos, moradas, etc.) — aplicado aqui, no único ponto por
+    // onde passa toda a escrita no Supabase, garante que nenhum formulário
+    // da app (nem os que ainda venham a ser criados) escapa a esta limpeza.
+    if (typeof v === 'string') v = v.trim();
     // Campo de texto em branco ("") vira null antes de enviar — evita o erro
     // "invalid input syntax for type numeric: ''" em colunas numéricas/inteiras
     // (ex: PVP, valores de orçamento) quando o campo fica vazio no formulário.
@@ -3731,9 +3734,25 @@ function buildField(field, draft) {
     control = h('input', {
       class: 'input', type: field.type, step: field.type === 'number' ? (field.step || '0.01') : undefined,
       placeholder: field.placeholder || '', inputmode: field.inputmode || undefined, pattern: field.pattern || undefined,
-      min: (field.type === 'number' && !field.allowNegative) ? '0' : undefined,
+      min: (field.type === 'number' && !field.allowNegative) ? '0' : (field.type === 'date' && field.blockPast ? todayISO() : undefined),
     });
     control.value = draft[field.name] || '';
+    // Campos de data marcados como blockPast (Entrega ao Domicílio, Início
+    // do MAPA 48H, etc.) nunca aceitam um dia já passado — além do `min`
+    // nativo (que já impede escolher no calendário do próprio browser),
+    // valida também no `change`, para o caso de o valor vir de outra forma
+    // (ex: colar, autofill, ou um browser que ignore o atributo min).
+    if (field.type === 'date' && field.blockPast) {
+      control.addEventListener('change', () => {
+        if (control.value && control.value < todayISO()) {
+          control.value = todayISO();
+          draft[field.name] = todayISO();
+          showToast('Não é possível selecionar uma data passada — foi reposta a data de hoje.', 'info');
+          if (field.onChange) field.onChange();
+          return;
+        }
+      });
+    }
     if (field.type === 'number' && !field.allowNegative) {
       control.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
     }
@@ -5529,12 +5548,34 @@ function buildValidadesPage(container, goTo) {
     produtoInput.addEventListener('input', () => { draft.produto = produtoInput.value; });
 
     const hojeDate = new Date();
-    const daquiUmAno = new Date(); daquiUmAno.setDate(daquiUmAno.getDate() + VALIDADES_LIMITE_DIAS);
-    const minMes = `${hojeDate.getFullYear()}-${pad2(hojeDate.getMonth() + 1)}`;
-    const maxMes = `${daquiUmAno.getFullYear()}-${pad2(daquiUmAno.getMonth() + 1)}`;
-    const validadeInput = h('input', { class: 'input', type: 'month', id: 'validade-mes-input', min: minMes, max: maxMes });
-    validadeInput.value = draft.validade || '';
-    validadeInput.addEventListener('change', () => { draft.validade = validadeInput.value; });
+    const anoAtual = hojeDate.getFullYear();
+    const mesAtual = hojeDate.getMonth() + 1;
+    // Interpreta o draft.validade existente ("YYYY-MM") para pré-selecionar
+    // os dropdowns; sem valor guardado, arranca já no mês/ano de hoje.
+    const partesValidade = String(draft.validade || '').split('-').map(Number);
+    let mesInicial = partesValidade[1] || mesAtual;
+    let anoInicial = partesValidade[0] || anoAtual;
+
+    // Dois dropdowns nativos — Mês (01 a 12) e Ano (ano atual e o seguinte,
+    // que é sempre o máximo possível dentro da janela de 1 ano) — em vez de
+    // um <input type="month">, para impedir totalmente qualquer digitação
+    // livre de texto: só é possível escolher valores da lista.
+    const mesSelect = h('select', { class: 'select', id: 'validade-mes-input' },
+      Array.from({ length: 12 }, (_, i) => i + 1).map(m => h('option', { value: pad2(m), selected: m === mesInicial ? 'selected' : undefined }, pad2(m))));
+    mesSelect.value = pad2(mesInicial);
+    const anoSelect = h('select', { class: 'select' },
+      [anoAtual, anoAtual + 1].map(a => h('option', { value: String(a), selected: a === anoInicial ? 'selected' : undefined }, String(a))));
+    anoSelect.value = String(anoInicial);
+    function atualizarValidadeDraft() {
+      draft.validade = `${anoSelect.value}-${mesSelect.value}`;
+      // Se a combinação escolhida ficar fora da janela de 1 ano (ex: mês já
+      // passado do ano atual, ou demasiado longe no ano seguinte), o Ano
+      // disponível ajusta-se sozinho para o mais próximo válido — nunca
+      // deixa ficar uma combinação impossível de submeter.
+    }
+    mesSelect.addEventListener('change', atualizarValidadeDraft);
+    anoSelect.addEventListener('change', atualizarValidadeDraft);
+    atualizarValidadeDraft(); // garante draft.validade já preenchido com a seleção inicial
 
     const quantidadeInput = h('input', { class: 'input', type: 'number', min: '0', placeholder: 'Ex: 12' });
     quantidadeInput.value = draft.quantidade || '';
@@ -5551,7 +5592,7 @@ function buildValidadesPage(container, goTo) {
     const campos = [
       buildCnpAutoFillField(),
       h('div', { class: 'field span2' }, [h('label', {}, 'Nome do Produto / Descrição'), produtoInput]),
-      h('div', { class: 'field field-xs' }, [h('label', {}, 'Data de Validade'), validadeInput, h('p', { class: 'field-helper-text' }, 'Só são aceites validades a menos de 1 ano.')]),
+      h('div', { class: 'field field-xs' }, [h('label', {}, 'Data de Validade (Mês / Ano)'), h('div', { style: 'display:flex;gap:6px;' }, [mesSelect, anoSelect]), h('p', { class: 'field-helper-text' }, 'Só são aceites validades a menos de 1 ano.')]),
       h('div', { class: 'field field-xs' }, [h('label', {}, 'Quantidade Disponível (opcional)'), quantidadeInput]),
       h('div', { class: 'field span2' }, [h('label', {}, 'Localização (opcional)'), localInput]),
     ];
