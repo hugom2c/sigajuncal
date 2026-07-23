@@ -696,6 +696,11 @@
   .meta-produto-contagem-btn:hover{background:var(--pharm-100);border-color:var(--pharm-300);}
   .meta-row-count-btn{background:none;border:none;cursor:pointer;font-family:inherit;padding:2px 4px;border-radius:6px;}
   .meta-row-count-btn:hover{background:var(--pharm-100);text-decoration:underline;}
+  /* Input compacto do popup de edição rápida das Unidades Vendidas dos
+     Objetivos — em vez do input genérico a 100% de largura, fica pequeno,
+     centrado e com o número em destaque. */
+  .input-unidades-compacto{width:120px;max-width:120px;margin:6px auto 0;display:block;
+    text-align:center;font-size:1.25rem;font-weight:600;}
   .recent-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;
     border-top:1px solid var(--pharm-100);}
   .recent-item:first-child{border-top:none;}
@@ -2443,7 +2448,7 @@ async function dbFetchNotaUtilizador(userId, modulo) {
     const { data, error } = await sb.from('notas_utilizador').select('*').eq('user_id', userId).eq('modulo', modulo).maybeSingle();
     if (error) { console.error('[Supabase] erro ao ler nota:', error.message); return { ok: false, nota: null }; }
     return { ok: true, nota: data ? rowToRecord(data) : null };
-  } catch (e) { console.error('[Supabase] erro de rede ao ler nota:', e); return { ok: false, nota: null }; }
+  } catch (e) { console.error('[Supabase] erro de rede ao ler nota:', formatarErroSeguro(e)); return { ok: false, nota: null }; }
 }
 async function dbUpsertNotaUtilizador(userId, modulo, texto) {
   if (!sb) return false;
@@ -2452,7 +2457,7 @@ async function dbUpsertNotaUtilizador(userId, modulo, texto) {
     const { error } = await sb.from('notas_utilizador').upsert(payload, { onConflict: 'user_id,modulo' });
     if (error) { console.error('[Supabase] erro ao guardar nota:', error.message); return false; }
     return true;
-  } catch (e) { console.error('[Supabase] erro de rede ao guardar nota:', e); return false; }
+  } catch (e) { console.error('[Supabase] erro de rede ao guardar nota:', formatarErroSeguro(e)); return false; }
 }
 async function dbClearNotaUtilizador(userId, modulo) {
   if (!sb) return false;
@@ -2460,7 +2465,7 @@ async function dbClearNotaUtilizador(userId, modulo) {
     const { error } = await sb.from('notas_utilizador').delete().eq('user_id', userId).eq('modulo', modulo);
     if (error) { console.error('[Supabase] erro ao limpar nota:', error.message); return false; }
     return true;
-  } catch (e) { console.error('[Supabase] erro de rede ao limpar nota:', e); return false; }
+  } catch (e) { console.error('[Supabase] erro de rede ao limpar nota:', formatarErroSeguro(e)); return false; }
 }
 // Dono da nota no Supabase: 'equipa' (valor fixo) para o bloco partilhado
 // pela equipa toda (ex: Página Inicial), ou o id do próprio utilizador para
@@ -2738,6 +2743,26 @@ const TABLES = {
 
 function camelToSnake(s) { return s.replace(/[A-Z]/g, m => '_' + m.toLowerCase()); }
 function snakeToCamel(s) { return s.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase()); }
+// Converte qualquer exceção apanhada num catch(e) para uma string simples e
+// segura de passar ao console. NUNCA passa o objeto de erro em bruto ao
+// console.error/warn: em certos ambientes (ex: consolas de pré-visualização
+// que reencaminham os logs para outra janela/frame via postMessage), um
+// objeto Error com propriedades internas não-clonáveis do fetch/rede
+// provoca "DataCloneError: The object can not be cloned" — o que faz
+// parecer que é a LEITURA do Supabase que está a falhar, quando na
+// realidade é só o próprio console.error a rebentar ao tentar mostrar o
+// erro. Reduzir sempre a uma string simples elimina esse risco de vez.
+function formatarErroSeguro(e) {
+  try {
+    if (e === null || e === undefined) return String(e);
+    if (typeof e === 'string') return e;
+    if (e instanceof Error) return `${e.name || 'Error'}: ${e.message || ''}`;
+    if (typeof e === 'object' && e.message) return String(e.message);
+    return JSON.stringify(e);
+  } catch (_) {
+    return '[erro não serializável]';
+  }
+}
 // Converte qualquer valor devolvido pelo Supabase para um objeto/array JSON
 // puro (sem protótipos, getters, Symbols ou outras propriedades não
 // serializáveis) através de uma ida-e-volta por JSON.parse(JSON.stringify(...)).
@@ -2752,7 +2777,7 @@ function sanitizarSupabase(valor) {
   try {
     return JSON.parse(JSON.stringify(valor));
   } catch (e) {
-    console.warn('[Supabase] falha ao sanitizar dados recebidos (a usar valor original):', e);
+    console.warn('[Supabase] falha ao sanitizar dados recebidos (a usar valor original):', formatarErroSeguro(e));
     return valor;
   }
 }
@@ -2806,7 +2831,7 @@ async function dbFetchAll(listKey) {
     const { data, error } = await query;
     if (error) { lastDbError = error.message; console.error(`[Supabase] erro ao ler ${listKey}:`, error.message); return []; }
     return sanitizarSupabase(data || []).map(rowToRecord);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao ler ${listKey}:`, e); return []; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao ler ${listKey}:`, formatarErroSeguro(e)); return []; }
 }
 async function dbFetchDeleted(listKey) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return []; }
@@ -2814,7 +2839,7 @@ async function dbFetchDeleted(listKey) {
     const { data, error } = await sb.from(TABLES[listKey]).select('*').eq('eliminado', true).order('data_eliminacao', { ascending: false });
     if (error) { lastDbError = error.message; console.error(`[Supabase] erro ao ler lixo de ${listKey}:`, error.message); return []; }
     return sanitizarSupabase(data || []).map(rowToRecord);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao ler lixo de ${listKey}:`, e); return []; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao ler lixo de ${listKey}:`, formatarErroSeguro(e)); return []; }
 }
 // Apagamento definitivo e irreversível — nunca disponível fora do Lixo, e
 // restrito ao perfil Administrador (ver isAdministrador()). Esta é a ÚNICA
@@ -2827,7 +2852,7 @@ async function dbPermanentDelete(listKey, id) {
     const { error } = await sb.from(TABLES[listKey]).delete().eq('id', id);
     if (error) { lastDbError = error.message; console.error(`[Supabase] erro ao eliminar definitivamente ${listKey}#${id}:`, error.message); return false; }
     return true;
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao eliminar definitivamente ${listKey}#${id}:`, e); return false; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao eliminar definitivamente ${listKey}#${id}:`, formatarErroSeguro(e)); return false; }
 }
 async function dbInsert(listKey, record) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível (verifique se o CDN do Supabase carregou).'; return null; }
@@ -2835,7 +2860,7 @@ async function dbInsert(listKey, record) {
     const { data, error } = await sb.from(TABLES[listKey]).insert(recordToRow(record)).select().single();
     if (error) { lastDbError = error.message; console.error(`[Supabase] erro ao inserir em ${listKey}:`, error.message); return null; }
     return rowToRecord(data);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao inserir em ${listKey}:`, e); return null; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao inserir em ${listKey}:`, formatarErroSeguro(e)); return null; }
 }
 async function dbUpdate(listKey, id, patch) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return null; }
@@ -2843,7 +2868,7 @@ async function dbUpdate(listKey, id, patch) {
     const { data, error } = await sb.from(TABLES[listKey]).update(recordToRow(patch)).eq('id', id).select().single();
     if (error) { lastDbError = error.message; console.error(`[Supabase] erro ao atualizar ${listKey}#${id}:`, error.message); return null; }
     return rowToRecord(data);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao atualizar ${listKey}#${id}:`, e); return null; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao atualizar ${listKey}#${id}:`, formatarErroSeguro(e)); return null; }
 }
 // "Eliminar" nunca apaga em definitivo — move o registo para o Lixo (soft delete)
 async function dbDelete(listKey, id) {
@@ -2854,7 +2879,7 @@ async function dbDelete(listKey, id) {
       .eq('id', id);
     if (error) { lastDbError = error.message; console.error(`[Supabase] erro ao mover ${listKey}#${id} para o lixo:`, error.message); return false; }
     return true;
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao mover ${listKey}#${id} para o lixo:`, e); return false; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error(`[Supabase] erro de rede ao mover ${listKey}#${id} para o lixo:`, formatarErroSeguro(e)); return false; }
 }
 // Elimina em lote (bulk) através de dbDelete, devolvendo o conjunto de ids
 // que foi mesmo apagado — usado por todos os módulos com eliminação
@@ -2892,7 +2917,7 @@ async function dbFetchChat() {
     const { data, error } = await sb.from('mensagens_chat').select('*').gte('created_at', seteDiasAtras).order('created_at', { ascending: true });
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao ler mensagens_chat:', error.message); return []; }
     return (data || []).map(rowToRecord);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao ler mensagens_chat:', e); return []; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao ler mensagens_chat:', formatarErroSeguro(e)); return []; }
 }
 // Limpeza automática: mensagens com mais de 7 dias são apagadas em definitivo
 // (nunca vão para o Lixo) — chamada uma vez a cada arranque da app.
@@ -2902,7 +2927,7 @@ async function dbCleanupOldChatMessages() {
     const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await sb.from('mensagens_chat').delete().lt('created_at', seteDiasAtras);
     if (error) console.error('[Supabase] erro na limpeza automática do chat:', error.message);
-  } catch (e) { console.error('[Supabase] erro de rede na limpeza automática do chat:', e); }
+  } catch (e) { console.error('[Supabase] erro de rede na limpeza automática do chat:', formatarErroSeguro(e)); }
 }
 async function dbInsertChatMsg(record) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return null; }
@@ -2910,7 +2935,7 @@ async function dbInsertChatMsg(record) {
     const { data, error } = await sb.from('mensagens_chat').insert(recordToRow(record)).select().single();
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao enviar mensagem:', error.message); return null; }
     return rowToRecord(data);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao enviar mensagem:', e); return null; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao enviar mensagem:', formatarErroSeguro(e)); return null; }
 }
 async function dbUpdateChatMsg(id, patch) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return null; }
@@ -2918,7 +2943,7 @@ async function dbUpdateChatMsg(id, patch) {
     const { data, error } = await sb.from('mensagens_chat').update(recordToRow(patch)).eq('id', id).select().single();
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao editar mensagem:', error.message); return null; }
     return rowToRecord(data);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao editar mensagem:', e); return null; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao editar mensagem:', formatarErroSeguro(e)); return null; }
 }
 async function dbDeleteChatMsg(id) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return false; }
@@ -2926,7 +2951,7 @@ async function dbDeleteChatMsg(id) {
     const { error } = await sb.from('mensagens_chat').delete().eq('id', id);
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao eliminar mensagem:', error.message); return false; }
     return true;
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao eliminar mensagem:', e); return false; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao eliminar mensagem:', formatarErroSeguro(e)); return false; }
 }
 async function dbClearChat() {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return false; }
@@ -2934,7 +2959,7 @@ async function dbClearChat() {
     const { error } = await sb.from('mensagens_chat').delete().gt('id', 0);
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao limpar o chat:', error.message); return false; }
     return true;
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao limpar o chat:', e); return false; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao limpar o chat:', formatarErroSeguro(e)); return false; }
 }
 // Contagem de não lidas fica em localStorage, por utilizador (username) —
 // nunca no Supabase, para não precisar de uma tabela de "leituras" à parte.
@@ -3051,7 +3076,7 @@ async function dbFetchMarcacoes(eventoId) {
     const { data, error } = await sb.from('eventos_marcacoes').select('*').eq('evento_id', eventoId).eq('eliminado', false).order('hora', { ascending: true });
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao ler marcações:', error.message); return []; }
     return (data || []).map(rowToRecord);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao ler marcações:', e); return []; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao ler marcações:', formatarErroSeguro(e)); return []; }
 }
 async function dbInsertMarcacao(record) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return null; }
@@ -3059,7 +3084,7 @@ async function dbInsertMarcacao(record) {
     const { data, error } = await sb.from('eventos_marcacoes').insert(recordToRow(record)).select().single();
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao inserir marcação:', error.message); return null; }
     return rowToRecord(data);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao inserir marcação:', e); return null; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao inserir marcação:', formatarErroSeguro(e)); return null; }
 }
 async function dbUpdateMarcacao(id, patch) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return null; }
@@ -3067,7 +3092,7 @@ async function dbUpdateMarcacao(id, patch) {
     const { data, error } = await sb.from('eventos_marcacoes').update(recordToRow(patch)).eq('id', id).select().single();
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao atualizar marcação:', error.message); return null; }
     return rowToRecord(data);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao atualizar marcação:', e); return null; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao atualizar marcação:', formatarErroSeguro(e)); return null; }
 }
 async function dbDeleteMarcacao(id) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return false; }
@@ -3077,7 +3102,7 @@ async function dbDeleteMarcacao(id) {
       .eq('id', id);
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao eliminar marcação:', error.message); return false; }
     return true;
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao eliminar marcação:', e); return false; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao eliminar marcação:', formatarErroSeguro(e)); return false; }
 }
 async function dbInsertMarcacoesBulk(rows) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return []; }
@@ -3085,7 +3110,7 @@ async function dbInsertMarcacoesBulk(rows) {
     const { data, error } = await sb.from('eventos_marcacoes').insert(rows.map(recordToRow)).select();
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao gerar grelha de horários:', error.message); return []; }
     return (data || []).map(rowToRecord);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao gerar grelha de horários:', e); return []; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao gerar grelha de horários:', formatarErroSeguro(e)); return []; }
 }
 
 /* ---- Contagem de marcações (vagas) por evento ---- */
@@ -3103,7 +3128,7 @@ async function dbFetchMarcacaoCounts() {
       if (row.nome_cliente && String(row.nome_cliente).trim()) counts[id].preenchidas += 1;
     });
     return counts;
-  } catch (e) { console.error('[Supabase] erro de rede ao contar marcações:', e); return {}; }
+  } catch (e) { console.error('[Supabase] erro de rede ao contar marcações:', formatarErroSeguro(e)); return {}; }
 }
 /* ---- Mensagem do Dia / Passagem de Turno (registo único, id fixo = 1) ---- */
 async function dbFetchMensagemDia() {
@@ -3112,7 +3137,7 @@ async function dbFetchMensagemDia() {
     const { data, error } = await sb.from('mensagem_dia').select('*').order('created_at', { ascending: false }).limit(1);
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao ler mensagem do dia:', error.message); return null; }
     return (data && data[0]) ? rowToRecord(data[0]) : null;
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao ler mensagem do dia:', e); return null; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao ler mensagem do dia:', formatarErroSeguro(e)); return null; }
 }
 async function dbFetchMensagemDiaHistorico() {
   if (!sb) return [];
@@ -3120,7 +3145,7 @@ async function dbFetchMensagemDiaHistorico() {
     const { data, error } = await sb.from('mensagem_dia').select('*').order('created_at', { ascending: false }).limit(200);
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao ler histórico de mensagens:', error.message); return []; }
     return (data || []).map(rowToRecord);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao ler histórico de mensagens:', e); return []; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao ler histórico de mensagens:', formatarErroSeguro(e)); return []; }
 }
 async function dbSaveMensagemDia(texto, responsavel) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return null; }
@@ -3129,7 +3154,7 @@ async function dbSaveMensagemDia(texto, responsavel) {
     const { data, error } = await sb.from('mensagem_dia').insert(recordToRow(record)).select().single();
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao guardar mensagem do dia:', error.message); return null; }
     return rowToRecord(data);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao guardar mensagem do dia:', e); return null; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao guardar mensagem do dia:', formatarErroSeguro(e)); return null; }
 }
 async function dbDeleteMensagemDiaVersao(id) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return false; }
@@ -3137,7 +3162,7 @@ async function dbDeleteMensagemDiaVersao(id) {
     const { error } = await sb.from('mensagem_dia').delete().eq('id', id);
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao eliminar mensagem:', error.message); return false; }
     return true;
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao eliminar mensagem:', e); return false; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao eliminar mensagem:', formatarErroSeguro(e)); return false; }
 }
 /* ---- Leitura da Mensagem do Dia por utilizador (mensagens_lidas) — o
    destaque/pulsação só aparece a quem ainda não viu ESTA mensagem em
@@ -3149,7 +3174,7 @@ async function dbMensagemJaLida(userId, mensagemId) {
     const { data, error } = await sb.from('mensagens_lidas').select('id').eq('user_id', userId).eq('mensagem_id', mensagemId).maybeSingle();
     if (error) { console.error('[Supabase] erro ao verificar leitura da mensagem:', error.message); return true; }
     return !!data;
-  } catch (e) { console.error('[Supabase] erro de rede ao verificar leitura da mensagem:', e); return true; }
+  } catch (e) { console.error('[Supabase] erro de rede ao verificar leitura da mensagem:', formatarErroSeguro(e)); return true; }
 }
 async function dbMarcarMensagemLida(userId, mensagemId) {
   if (!sb || !userId || !mensagemId) return false;
@@ -3158,7 +3183,7 @@ async function dbMarcarMensagemLida(userId, mensagemId) {
       .upsert({ user_id: userId, mensagem_id: mensagemId, updated_at: new Date().toISOString() }, { onConflict: 'user_id,mensagem_id' });
     if (error) { console.error('[Supabase] erro ao marcar mensagem como lida:', error.message); return false; }
     return true;
-  } catch (e) { console.error('[Supabase] erro de rede ao marcar mensagem como lida:', e); return false; }
+  } catch (e) { console.error('[Supabase] erro de rede ao marcar mensagem como lida:', formatarErroSeguro(e)); return false; }
 }
 // Cache em memória (só desta sessão do browser) para não repetir a consulta
 // nem reanimar o banner sempre que a Página Inicial voltar a renderizar.
@@ -4286,7 +4311,7 @@ function abrirModalEdicaoUnidades(objetivo, produtoIdx, onSaved) {
   function onKeydown(e) { if (e.key === 'Escape') close(); }
   document.addEventListener('keydown', onKeydown);
 
-  const input = h('input', { class: 'input', type: 'number', min: '0', inputmode: 'numeric' });
+  const input = h('input', { class: 'input input-unidades-compacto', type: 'number', min: '0', inputmode: 'numeric' });
   input.value = String(Math.round(parseFloat(produto.atual) || 0));
 
   function guardar() {
@@ -4299,9 +4324,9 @@ function abrirModalEdicaoUnidades(objetivo, produtoIdx, onSaved) {
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') guardar(); });
 
   const panel = h('div', { class: 'modal-panel confirm-panel' }, [
-    h('p', { class: 'modal-title', style: 'margin-bottom:12px;' }, `${produto.nome || 'Produto'} — Unidades Vendidas`),
-    h('div', { class: 'field' }, [
-      h('label', {}, `Meta: ${Math.round(parseFloat(produto.meta) || 0)} un.`),
+    h('p', { class: 'modal-title', style: 'margin-bottom:12px;text-align:center;' }, `${produto.nome || 'Produto'} — Unidades Vendidas`),
+    h('div', { class: 'field', style: 'align-items:center;' }, [
+      h('label', { style: 'text-align:center;' }, `Meta: ${Math.round(parseFloat(produto.meta) || 0)} un.`),
       input,
     ]),
     h('div', { class: 'form-actions' }, [saveBtn, cancelBtn]),
@@ -4667,7 +4692,7 @@ function buildHomepage(container, goTo) {
     h('div', { style: 'min-width:0;' }, [
       h('p', { class: 'stat-label' }, 'Prémios Ativos'),
       h('p', { class: 'next-evento-card-title' }, `${premiosColetivos + premiosIndividuais} no total`),
-      h('p', { class: 'next-evento-card-sub' }, `👥 ${premiosColetivos} Coletivos · 👤 ${premiosIndividuais} Individuais`),
+      h('p', { class: 'next-evento-card-sub' }, `${premiosColetivos} Coletivos · ${premiosIndividuais} Individuais`),
     ]),
   ]);
 
@@ -7070,7 +7095,7 @@ async function baixarPdfDocumento(conteudoNode, nomeFicheiro) {
       }).from(folha).save();
       return;
     } catch (e) {
-      console.error('[html2pdf] erro ao gerar PDF:', e);
+      console.error('[html2pdf] erro ao gerar PDF:', formatarErroSeguro(e));
     }
   }
   alert('Não foi possível gerar o PDF diretamente — usa "Imprimir" e escolhe "Guardar como PDF" na caixa de diálogo de impressão do browser.');
@@ -7137,7 +7162,7 @@ async function dbInserirDocumentoEmitido(record) {
     const { data, error } = await sb.from('documentos_emitidos').insert(row).select().single();
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao gravar documento emitido:', error.message); return null; }
     return rowToRecord(data);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao gravar documento emitido:', e); return null; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao gravar documento emitido:', formatarErroSeguro(e)); return null; }
 }
 async function dbAtualizarDocumentoEmitido(id, record) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return null; }
@@ -7157,7 +7182,7 @@ async function dbAtualizarDocumentoEmitido(id, record) {
     const { data, error } = await sb.from('documentos_emitidos').update(row).eq('id', id).select().single();
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao atualizar documento emitido:', error.message); return null; }
     return rowToRecord(data);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao atualizar documento emitido:', e); return null; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao atualizar documento emitido:', formatarErroSeguro(e)); return null; }
 }
 async function dbEliminarDocumentoEmitido(id) {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return false; }
@@ -7165,7 +7190,7 @@ async function dbEliminarDocumentoEmitido(id) {
     const { error } = await sb.from('documentos_emitidos').delete().eq('id', id);
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao eliminar documento emitido:', error.message); return false; }
     return true;
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao eliminar documento emitido:', e); return false; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao eliminar documento emitido:', formatarErroSeguro(e)); return false; }
 }
 async function dbFetchDocumentosEmitidos() {
   if (!sb) { lastDbError = 'Cliente Supabase indisponível.'; return []; }
@@ -7173,7 +7198,7 @@ async function dbFetchDocumentosEmitidos() {
     const { data, error } = await sb.from('documentos_emitidos').select('*').order('created_at', { ascending: false });
     if (error) { lastDbError = error.message; console.error('[Supabase] erro ao ler documentos_emitidos:', error.message); return []; }
     return (data || []).map(rowToRecord);
-  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao ler documentos_emitidos:', e); return []; }
+  } catch (e) { lastDbError = e && e.message ? e.message : 'Falha de rede ao comunicar com o Supabase.'; console.error('[Supabase] erro de rede ao ler documentos_emitidos:', formatarErroSeguro(e)); return []; }
 }
 function parseJSONSafe(str) {
   if (!str) return null;
@@ -7456,15 +7481,31 @@ function buildDeclaracaoAvaliacaoFisicaPage(container, goTo) {
 
     // Altura/Peso/Tensão em linha compacta, cada campo com largura limitada
     // — evita esticar 3 números curtos por toda a largura do ecrã.
-    const alturaInput = h('input', { class: 'input', type: 'number', step: '0.01', placeholder: 'Ex: 1.75' });
+    const alturaInput = h('input', { class: 'input', type: 'number', step: '0.01', min: '0', placeholder: 'Ex: 1.75' });
     alturaInput.value = draft.altura;
-    alturaInput.addEventListener('input', () => { draft.altura = alturaInput.value; });
-    const pesoInput = h('input', { class: 'input', type: 'number', step: '0.1', placeholder: 'Ex: 70.5' });
+    alturaInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
+    alturaInput.addEventListener('input', () => {
+      if (alturaInput.value !== '' && parseFloat(alturaInput.value) < 0) alturaInput.value = alturaInput.value.replace('-', '');
+      draft.altura = alturaInput.value;
+    });
+    const pesoInput = h('input', { class: 'input', type: 'number', step: '0.1', min: '0', placeholder: 'Ex: 70.5' });
     pesoInput.value = draft.peso;
-    pesoInput.addEventListener('input', () => { draft.peso = pesoInput.value; });
-    const tensaoInput = h('input', { class: 'input', placeholder: 'Ex: 120/80' });
+    pesoInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
+    pesoInput.addEventListener('input', () => {
+      if (pesoInput.value !== '' && parseFloat(pesoInput.value) < 0) pesoInput.value = pesoInput.value.replace('-', '');
+      draft.peso = pesoInput.value;
+    });
+    // Tensão Arterial fica em formato texto "120/80" (não é um número
+    // simples), mas nunca faz sentido conter um sinal "-" — bloqueia-o tal
+    // como nos campos numéricos, só que preservando a barra "/".
+    const tensaoInput = h('input', { class: 'input', placeholder: 'Ex: 120/80', inputmode: 'numeric' });
     tensaoInput.value = draft.tensao;
-    tensaoInput.addEventListener('input', () => { draft.tensao = tensaoInput.value; });
+    tensaoInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
+    tensaoInput.addEventListener('input', () => {
+      const cleaned = tensaoInput.value.replace(/[^0-9/]/g, '');
+      if (cleaned !== tensaoInput.value) tensaoInput.value = cleaned;
+      draft.tensao = tensaoInput.value;
+    });
 
     const medidasRow = h('div', { class: 'doc-fields-row' }, [
       h('div', { class: 'field doc-w-32' }, [h('label', {}, 'Altura (m)'), alturaInput]),
@@ -10354,7 +10395,7 @@ function render() {
   } catch (erroPagina) {
     // Nunca deixa um erro nesta página em concreto derrubar a app inteira
     // (ecrã em branco) — regista no console e mostra um ecrã recuperável.
-    console.error('[SigaJuncal] erro ao construir a página "' + STATE.page + '":', erroPagina);
+    console.error('[SigaJuncal] erro ao construir a página "' + STATE.page + '":', formatarErroSeguro(erroPagina));
     if (pageContainer) {
       clear(pageContainer);
       pageContainer.appendChild(h('div', { class: 'animate-in card card-pad', style: 'margin:24px;max-width:520px;' }, [
