@@ -192,6 +192,7 @@
 
   /* Validades — lista de produtos a escoar prioritariamente */
   .validade-item-row{display:flex;align-items:center;gap:10px;}
+  .validade-item-row.row-selected{background:var(--pharm-100) !important;}
   .validade-item-urgente{border-left:4px solid var(--red);background:var(--red-bg);}
   .validade-qtd-field{flex-shrink:0;width:74px;}
   .validade-qtd-field label{font-size:10px;}
@@ -1197,6 +1198,7 @@ const ICONS = {
   returnBox: '<path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"/><path d="M3 3v5h5"/>',
   paw: '<ellipse cx="12" cy="17.5" rx="5" ry="3.8"/><circle cx="4.8" cy="11" r="1.9"/><circle cx="9.3" cy="6.2" r="2.1"/><circle cx="14.7" cy="6.2" r="2.1"/><circle cx="19.2" cy="11" r="1.9"/>',
   alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  hourglass: '<path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   clipboard: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/>',
   clipboardCheck: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 14l2 2 4-4"/>',
@@ -1338,7 +1340,7 @@ const NAV_SECTIONS = [
     { key: 'erros', label: 'Erros de Stock', icon: 'alert' },
     { key: 'recolhas', label: 'Recolhas', icon: 'returnBox' },
     { key: 'calculadoras', label: 'Calculadoras PVP', icon: 'calculator' },
-    { key: 'validades', label: 'Validades', icon: 'clock' },
+    { key: 'validades', label: 'Validades', icon: 'hourglass' },
   ] },
   { title: 'Gestão', items: [
     { key: 'reclamacoes', label: 'Reclamações', icon: 'bookOpen', tone: 'red' },
@@ -2199,7 +2201,7 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
   function buildForm() {
     const isNutricao = agendaEhNutricao(prestadorKey);
     const isDepilacao = agendaEhDepilacao(prestadorKey);
-    const nomeInput = h('input', { class: 'input', placeholder: 'Nome do Cliente' });
+    const nomeInput = h('input', { class: 'input', placeholder: 'Nome do Cliente', maxlength: '100' });
     nomeInput.value = formDraft.nomeCliente || '';
     nomeInput.addEventListener('input', () => { formDraft.nomeCliente = nomeInput.value; });
 
@@ -2261,7 +2263,9 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
     const saveBtn = h('button', { class: 'btn btn-primary', onclick: saving ? null : () => requireAuth(submitForm), disabled: saving ? 'disabled' : undefined }, saving ? 'A guardar…' : 'Confirmar Marcação');
     const cancelBtn = h('button', { class: 'btn btn-secondary', onclick: cancelForm }, 'Cancelar');
 
-    const children = [h('div', { class: 'form-grid' }, campos), duracaoInfo];
+    const camposGrid = h('div', { class: 'form-grid' }, campos);
+    attachFormEnterNavigation(camposGrid, () => requireAuth(submitForm));
+    const children = [camposGrid, duracaoInfo];
     if (formError) children.push(h('p', { class: 'form-error' }, formError));
     children.push(h('div', { class: 'form-actions' }, [saveBtn, cancelBtn]));
     return h('div', { class: 'card card-pad' }, children);
@@ -3752,9 +3756,16 @@ function buildField(field, draft) {
     if (field.onChange) control.addEventListener('change', () => field.onChange());
   }
   const kids = [h('label', {}, field.label), control];
-  if (field.maxLength) {
-    control.maxLength = field.maxLength;
-    control.setAttribute('maxlength', String(field.maxLength));
+  // Rede de segurança: todo o campo de texto livre tem sempre um limite de
+  // carateres, mesmo quando o schema não define um explicitamente — evita
+  // colagens gigantescas por engano (ex: colar um documento inteiro num
+  // campo de Nome). Campos com um field.maxLength próprio (Contacto,
+  // Serviço/Zonas, Observações, etc.) mantêm o valor mais apertado que já
+  // tinham definido.
+  const maxLengthEfetivo = field.maxLength || (field.type === 'textarea' ? 500 : (field.type === 'text' ? 200 : null));
+  if (maxLengthEfetivo) {
+    control.maxLength = maxLengthEfetivo;
+    control.setAttribute('maxlength', String(maxLengthEfetivo));
   }
   if (field.disabled) {
     control.disabled = true;
@@ -3765,9 +3776,49 @@ function buildField(field, draft) {
   return h('div', { class: 'field' + colClass }, kids);
 }
 
+// Enter avança para o campo seguinte em formulários com vários campos —
+// como um Tab — em vez de submeter logo; no ÚLTIMO campo, Enter já não
+// grava diretamente: abre uma confirmação rápida (carregar Enter outra vez,
+// ou clicar em "Sim", é que efetiva a gravação). Evita gravações acidentais
+// a meio do preenchimento, mantendo a navegação fluida entre campos.
+function attachFormEnterNavigation(containerEl, onFinalSubmit) {
+  let aguardandoConfirmacao = false;
+  function camposNavegaveis() {
+    return Array.from(containerEl.querySelectorAll('input, select'))
+      .filter(el => !el.disabled && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden');
+  }
+  containerEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const alvo = e.target;
+    // Nas Observações (textarea) o Enter continua a servir para mudar de
+    // linha, como é normal num campo de texto livre.
+    if (alvo.tagName === 'TEXTAREA') return;
+    if (alvo.tagName !== 'INPUT' && alvo.tagName !== 'SELECT') return;
+    e.preventDefault();
+    // Já há uma confirmação pendente (o popup ainda está aberto) — não
+    // volta a abrir outra por cima; é o próprio popup que já trata do Enter.
+    if (aguardandoConfirmacao) return;
+    const lista = camposNavegaveis();
+    const idx = lista.indexOf(alvo);
+    if (idx === -1) return;
+    if (idx < lista.length - 1) {
+      const proximo = lista[idx + 1];
+      proximo.focus();
+      if (proximo.select) proximo.select();
+    } else {
+      aguardandoConfirmacao = true;
+      confirmDialog('Deseja guardar esta entrada? Pressione Enter novamente ou clique em "Sim" para confirmar.', () => {
+        aguardandoConfirmacao = false;
+        onFinalSubmit();
+      }, { confirmLabel: 'Sim, guardar', onCancel: () => { aguardandoConfirmacao = false; } });
+    }
+  });
+}
+
 function buildRecordForm(schema, draft, opts) {
   const overrides = opts.fieldOverrides || {};
   const grid = h('div', { class: 'form-grid' }, schema.map(f => (overrides[f.name] ? overrides[f.name](f, draft) : buildField(f, draft))));
+  attachFormEnterNavigation(grid, () => requireAuth(opts.onSubmit));
   const submitBtn = h('button', {
     class: 'btn btn-primary', onclick: opts.saving ? null : () => requireAuth(opts.onSubmit), disabled: opts.saving ? 'disabled' : undefined,
   }, opts.saving ? 'A guardar…' : (opts.editing ? 'Guardar alterações' : 'Adicionar registo'));
@@ -3832,15 +3883,20 @@ function showDbErrorToast(acao) {
 function confirmDialog(message, onConfirm, opts) {
   opts = opts || {};
   const overlay = h('div', { class: 'modal-overlay' });
-  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  let resolved = false; // evita confirmar/cancelar duas vezes (ex: Enter + clique quase ao mesmo tempo)
+  function fechar() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
+  function cancelar() { if (resolved) return; resolved = true; fechar(); if (opts.onCancel) opts.onCancel(); }
+  function confirmar() { if (resolved) return; resolved = true; fechar(); onConfirm(); }
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) cancelar(); });
+  // Enter confirma (é assim que se efetiva a gravação depois do popup
+  // aparecer, tal como pedido para os formulários) — Escape cancela.
+  function onKeydown(e) {
+    if (e.key === 'Escape') cancelar();
+    else if (e.key === 'Enter') { e.preventDefault(); confirmar(); }
+  }
   document.addEventListener('keydown', onKeydown);
-  const confirmBtn = h('button', { class: opts.danger ? 'btn btn-danger-solid' : 'btn btn-primary', onclick: () => {
-    close();
-    onConfirm();
-  } }, opts.confirmLabel || 'Confirmar');
-  const cancelBtn = h('button', { class: 'btn btn-secondary', onclick: close }, 'Cancelar');
+  const confirmBtn = h('button', { class: opts.danger ? 'btn btn-danger-solid' : 'btn btn-primary', onclick: confirmar }, opts.confirmLabel || 'Confirmar');
+  const cancelBtn = h('button', { class: 'btn btn-secondary', onclick: cancelar }, 'Cancelar');
   const panel = h('div', { class: 'modal-panel confirm-panel' }, [
     h('p', { class: 'confirm-message' }, message),
     h('div', { class: 'form-actions' }, [confirmBtn, cancelBtn]),
@@ -4667,7 +4723,7 @@ function buildValidadesTickerWidget(goTo) {
   viewport.dataset.atual = '0';
   const card = h('div', { class: 'card card-pad validades-ticker-card clickable', title: 'Ver todas as Validades' }, [
     h('div', { class: 'validades-ticker-header' }, [
-      Icon('clock', { size: 15, strokeWidth: 2.2 }),
+      Icon('hourglass', { size: 15, strokeWidth: 2.2 }),
       h('span', {}, `${lista.length === 1 ? '1 produto' : lista.length + ' produtos'} a escoar prioritariamente`),
     ]),
     viewport,
@@ -5283,18 +5339,28 @@ const VALIDADES_LIMITE_DIAS = 365;
 // produto só deixa de poder ser registado depois de sair mesmo de validade
 // dentro do próximo ano).
 function validadeUltimoDia(mesAno) {
-  const partes = String(mesAno || '').split('-');
+  // Formato estrito "YYYY-MM" — qualquer coisa fora disto é inválida.
+  if (!/^\d{4}-\d{2}$/.test(String(mesAno || ''))) return null;
+  const partes = String(mesAno).split('-');
   const ano = parseInt(partes[0], 10), mes = parseInt(partes[1], 10);
-  if (!ano || !mes) return null;
+  if (!ano || !mes || mes < 1 || mes > 12) return null;
   return new Date(ano, mes, 0, 23, 59, 59);
 }
-function validadeDentroDoLimite(mesAno) {
+// Classifica a Data de Validade introduzida: 'invalido' (formato errado),
+// 'passado' (já fora de validade — nunca faz sentido registar aqui),
+// 'muito_futuro' (mais de 1 ano — fora do âmbito deste módulo, que é só
+// para escoamento prioritário), ou 'ok'.
+function validadeStatus(mesAno) {
   const limite = validadeUltimoDia(mesAno);
-  if (!limite) return false;
+  if (!limite) return 'invalido';
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  if (limite < hoje) return 'passado';
   const dataLimite = new Date();
   dataLimite.setDate(dataLimite.getDate() + VALIDADES_LIMITE_DIAS);
-  return limite <= dataLimite;
+  if (limite > dataLimite) return 'muito_futuro';
+  return 'ok';
 }
+function validadeDentroDoLimite(mesAno) { return validadeStatus(mesAno) === 'ok'; }
 function validadeFormatarMesAno(mesAno) {
   const partes = String(mesAno || '').split('-');
   const ano = partes[0], mes = parseInt(partes[1], 10);
@@ -5304,13 +5370,29 @@ function validadeFormatarMesAno(mesAno) {
 }
 function buildValidadesPage(container, goTo) {
   let showForm = false;
+  let editingId = null;
   let draft = { cnp: '', produto: '', validade: '', quantidade: '', localizacao: '' };
   let formError = '';
   let saving = false;
   let searchQuery = '';
+  let selectedIds = new Set();
 
   function rerender() { clear(container); container.appendChild(build()); }
-  function openNew() { draft = { cnp: '', produto: '', validade: '', quantidade: '', localizacao: '' }; formError = ''; showForm = true; rerender(); }
+  function toggleSelect(id) { if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id); rerender(); }
+  function openNew() {
+    editingId = null;
+    draft = { cnp: '', produto: '', validade: '', quantidade: '', localizacao: '' };
+    formError = ''; showForm = true; rerender();
+  }
+  function openEditSelected() {
+    if (selectedIds.size !== 1) return;
+    const id = [...selectedIds][0];
+    const r = STATE.validades.find(x => x.id === id);
+    if (!r) return;
+    editingId = r.id;
+    draft = { cnp: r.cnp || '', produto: r.produto || '', validade: r.validade || '', quantidade: (r.quantidade === null || r.quantidade === undefined) ? '' : String(r.quantidade), localizacao: r.localizacao || '' };
+    formError = ''; showForm = true; rerender();
+  }
   function cancel() { showForm = false; formError = ''; rerender(); }
 
   function visibleValidades() {
@@ -5348,9 +5430,6 @@ function buildValidadesPage(container, goTo) {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(consultarEPreencher, 350);
     });
-    control.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); if (debounceTimer) clearTimeout(debounceTimer); consultarEPreencher(); }
-    });
     control.addEventListener('change', () => { if (debounceTimer) clearTimeout(debounceTimer); consultarEPreencher(); });
     control.addEventListener('blur', () => { if (debounceTimer) clearTimeout(debounceTimer); consultarEPreencher(); });
     return h('div', { class: 'field field-xs' }, [h('label', {}, 'CNP / EAN / Código Interno'), control]);
@@ -5367,7 +5446,18 @@ function buildValidadesPage(container, goTo) {
       rerender();
       return;
     }
-    if (!validadeDentroDoLimite(draft.validade)) {
+    const estadoValidade = validadeStatus(draft.validade);
+    if (estadoValidade === 'invalido') {
+      formError = 'Data de Validade inválida — indique um mês/ano no formato correto.';
+      rerender();
+      return;
+    }
+    if (estadoValidade === 'passado') {
+      formError = 'Este produto já está fora de validade — não deve ser registado aqui.';
+      rerender();
+      return;
+    }
+    if (estadoValidade === 'muito_futuro') {
       formError = 'Apenas podem ser registados produtos com validade inferior a 1 ano a contar da data atual (foco no escoamento prioritário).';
       rerender();
       return;
@@ -5379,23 +5469,41 @@ function buildValidadesPage(container, goTo) {
       quantidade: draft.quantidade === '' ? null : Math.max(0, parseInt(draft.quantidade, 10) || 0),
       localizacao: draft.localizacao || '', responsavel: currentUserName(),
     };
-    const created = await dbInsert('validades', payload);
-    saving = false;
-    if (created) {
-      STATE.validades = [created, ...STATE.validades];
-      showForm = false;
-      if (String(draft.cnp || '').trim() && String(draft.produto || '').trim()) dbUpsertDicionarioCnp(draft.cnp, draft.produto);
+    if (editingId) {
+      const updated = await dbUpdate('validades', editingId, payload);
+      saving = false;
+      if (updated) {
+        STATE.validades = STATE.validades.map(x => x.id === editingId ? updated : x);
+        showForm = false; selectedIds = new Set();
+        if (String(draft.cnp || '').trim() && String(draft.produto || '').trim()) dbUpsertDicionarioCnp(draft.cnp, draft.produto);
+      } else {
+        formError = `Não foi possível guardar as alterações. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
+      }
     } else {
-      formError = `Não foi possível guardar. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
+      const created = await dbInsert('validades', payload);
+      saving = false;
+      if (created) {
+        STATE.validades = [created, ...STATE.validades];
+        showForm = false;
+        if (String(draft.cnp || '').trim() && String(draft.produto || '').trim()) dbUpsertDicionarioCnp(draft.cnp, draft.produto);
+      } else {
+        formError = `Não foi possível guardar. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
+      }
     }
     rerender();
   }
 
-  function eliminar(r) {
-    confirmDialog(`Eliminar o registo de validade de "${r.produto || r.cnp || 'sem nome'}"?`, async () => {
-      const ok = await dbDelete('validades', r.id);
-      if (ok) { STATE.validades = STATE.validades.filter(x => x.id !== r.id); rerender(); }
-      else showDbErrorToast('Não foi possível eliminar o registo');
+  function removeSelecionados() {
+    if (selectedIds.size === 0) return;
+    const ids = [...selectedIds];
+    const plural = ids.length > 1;
+    confirmDialog(`Eliminar ${ids.length} registo${plural ? 's' : ''} de validade selecionado${plural ? 's' : ''}?`, async () => {
+      const resultados = await Promise.all(ids.map(id => dbDelete('validades', id)));
+      const apagados = new Set(ids.filter((id, i) => resultados[i]));
+      STATE.validades = STATE.validades.filter(r => !apagados.has(r.id));
+      selectedIds = new Set([...selectedIds].filter(id => !apagados.has(id)));
+      showForm = false; rerender();
+      if (apagados.size < ids.length) showDbErrorToast('Alguns registos não puderam ser eliminados');
     }, { danger: true, confirmLabel: 'Eliminar' });
   }
 
@@ -5409,11 +5517,15 @@ function buildValidadesPage(container, goTo) {
   }
 
   function buildForm() {
-    const produtoInput = h('input', { class: 'input', placeholder: 'Nome do Produto' });
+    const produtoInput = h('input', { class: 'input', placeholder: 'Nome do Produto', maxlength: '150' });
     produtoInput.value = draft.produto || '';
     produtoInput.addEventListener('input', () => { draft.produto = produtoInput.value; });
 
-    const validadeInput = h('input', { class: 'input', type: 'month', id: 'validade-mes-input' });
+    const hojeDate = new Date();
+    const daquiUmAno = new Date(); daquiUmAno.setDate(daquiUmAno.getDate() + VALIDADES_LIMITE_DIAS);
+    const minMes = `${hojeDate.getFullYear()}-${pad2(hojeDate.getMonth() + 1)}`;
+    const maxMes = `${daquiUmAno.getFullYear()}-${pad2(daquiUmAno.getMonth() + 1)}`;
+    const validadeInput = h('input', { class: 'input', type: 'month', id: 'validade-mes-input', min: minMes, max: maxMes });
     validadeInput.value = draft.validade || '';
     validadeInput.addEventListener('change', () => { draft.validade = validadeInput.value; });
 
@@ -5425,7 +5537,7 @@ function buildValidadesPage(container, goTo) {
       draft.quantidade = quantidadeInput.value;
     });
 
-    const localInput = h('input', { class: 'input', placeholder: 'Ex: Prateleira 3, Armário B...' });
+    const localInput = h('input', { class: 'input', placeholder: 'Ex: Prateleira 3, Armário B...', maxlength: '100' });
     localInput.value = draft.localizacao || '';
     localInput.addEventListener('input', () => { draft.localizacao = localInput.value; });
 
@@ -5436,9 +5548,14 @@ function buildValidadesPage(container, goTo) {
       h('div', { class: 'field field-xs' }, [h('label', {}, 'Quantidade Disponível (opcional)'), quantidadeInput]),
       h('div', { class: 'field span2' }, [h('label', {}, 'Localização (opcional)'), localInput]),
     ];
-    const saveBtn = h('button', { class: 'btn btn-primary', onclick: saving ? null : submit, disabled: saving ? 'disabled' : undefined }, saving ? 'A guardar…' : 'Guardar');
+    const grid = h('div', { class: 'form-grid' }, campos);
+    attachFormEnterNavigation(grid, () => requireAuth(submit));
+    const saveBtn = h('button', { class: 'btn btn-primary', onclick: saving ? null : () => requireAuth(submit), disabled: saving ? 'disabled' : undefined }, saving ? 'A guardar…' : (editingId ? 'Guardar alterações' : 'Guardar'));
     const cancelBtn = h('button', { class: 'btn btn-secondary', onclick: cancel }, 'Cancelar');
-    const children = [h('div', { class: 'form-grid' }, campos)];
+    const children = [
+      h('h3', { class: 'page-eyebrow', style: 'margin-bottom:14px;color:var(--pharm-800);font-size:15px;text-transform:none;letter-spacing:0;' }, editingId ? 'Editar registo' : 'Novo registo'),
+      grid,
+    ];
     if (formError) children.push(h('p', { class: 'form-error' }, formError));
     children.push(h('div', { class: 'form-actions' }, [saveBtn, cancelBtn]));
     return h('div', { class: 'card card-pad' }, children);
@@ -5446,8 +5563,7 @@ function buildValidadesPage(container, goTo) {
 
   function build() {
     const wrap = h('div', { class: 'animate-in' });
-    const addBtn = h('button', { class: 'btn btn-primary', onclick: () => requireAuth(openNew) }, [Icon('plus', { size: 14, strokeWidth: 2.4 }), ' Novo Registo']);
-    wrap.appendChild(withBackButton(buildPageHeader('clock', 'Validades', 'Produtos a escoar prioritariamente — validade inferior a 1 ano.', addBtn), goTo));
+    wrap.appendChild(withBackButton(buildPageHeader('hourglass', 'Validades', 'Produtos a escoar prioritariamente — validade inferior a 1 ano.', STATE.validades.length), goTo));
 
     if (showForm) { wrap.appendChild(buildForm()); return wrap; }
 
@@ -5459,40 +5575,58 @@ function buildValidadesPage(container, goTo) {
     const lista = visibleValidades();
     if (!lista.length) {
       wrap.appendChild(h('p', { class: 'cell-muted', style: 'margin-top:16px;' }, 'Ainda não há produtos registados em Validades.'));
-      return wrap;
-    }
-    const linhas = lista.map(r => {
-      const limite30 = new Date(); limite30.setDate(limite30.getDate() + 30);
-      const perto = validadeUltimoDia(r.validade) && validadeUltimoDia(r.validade) <= limite30;
-      const delBtn = h('button', { class: 'btn-fab-sm tone-red', title: 'Eliminar', 'aria-label': 'Eliminar' }, Icon('trash', { size: 12, strokeWidth: 2.2 }));
-      delBtn.addEventListener('click', () => requireAuth(() => eliminar(r)));
+    } else {
+      const linhas = lista.map(r => {
+        const limite30 = new Date(); limite30.setDate(limite30.getDate() + 30);
+        const perto = validadeUltimoDia(r.validade) && validadeUltimoDia(r.validade) <= limite30;
+        const selected = selectedIds.has(r.id);
 
-      // Quantidade Disponível — editável diretamente na lista, sem abrir o
-      // formulário, para acompanhar as vendas ao balcão em tempo real.
-      const qtdInput = h('input', { class: 'input validade-qtd-input', type: 'number', min: '0', placeholder: '—', title: 'Quantidade Disponível' });
-      qtdInput.value = (r.quantidade === null || r.quantidade === undefined) ? '' : String(r.quantidade);
-      qtdInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); if (e.key === 'Enter') qtdInput.blur(); });
-      qtdInput.addEventListener('change', () => {
-        requireAuth(() => {
-          const novo = qtdInput.value === '' ? null : Math.max(0, parseInt(qtdInput.value, 10) || 0);
-          qtdInput.value = novo === null ? '' : String(novo);
-          atualizarQuantidade(r, novo);
+        // Quantidade Disponível — editável diretamente na lista, sem abrir o
+        // formulário, para acompanhar as vendas ao balcão em tempo real.
+        const qtdInput = h('input', { class: 'input validade-qtd-input', type: 'number', min: '0', placeholder: '—', title: 'Quantidade Disponível' });
+        qtdInput.value = (r.quantidade === null || r.quantidade === undefined) ? '' : String(r.quantidade);
+        qtdInput.addEventListener('click', (e) => e.stopPropagation());
+        qtdInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); if (e.key === 'Enter') { e.preventDefault(); qtdInput.blur(); } });
+        qtdInput.addEventListener('change', () => {
+          requireAuth(() => {
+            const novo = qtdInput.value === '' ? null : Math.max(0, parseInt(qtdInput.value, 10) || 0);
+            qtdInput.value = novo === null ? '' : String(novo);
+            atualizarQuantidade(r, novo);
+          });
         });
-      });
 
-      return h('div', { class: 'card card-pad validade-item-row' + (perto ? ' validade-item-urgente' : '') }, [
-        h('div', { style: 'flex:1;min-width:0;' }, [
-          h('p', { class: 'cell-strong', style: 'margin:0 0 3px;' }, r.produto || r.cnp || 'Sem nome'),
-          h('p', { class: 'cell-muted', style: 'margin:0;font-size:12px;' }, [
-            r.cnp ? `CNP ${r.cnp} · ` : '', `Validade: ${validadeFormatarMesAno(r.validade)}`,
-            r.localizacao ? ` · ${r.localizacao}` : '',
+        const cb = h('input', { type: 'checkbox', checked: selected });
+        cb.addEventListener('click', (e) => e.stopPropagation());
+        cb.addEventListener('change', () => toggleSelect(r.id));
+
+        const row = h('div', { class: 'card card-pad validade-item-row' + (perto ? ' validade-item-urgente' : '') + (selected ? ' row-selected' : ''), style: 'cursor:pointer;' }, [
+          cb,
+          h('div', { style: 'flex:1;min-width:0;' }, [
+            h('p', { class: 'cell-strong', style: 'margin:0 0 3px;' }, r.produto || r.cnp || 'Sem nome'),
+            h('p', { class: 'cell-muted', style: 'margin:0;font-size:12px;' }, [
+              r.cnp ? `CNP ${r.cnp} · ` : '', `Validade: ${validadeFormatarMesAno(r.validade)}`,
+              r.localizacao ? ` · ${r.localizacao}` : '',
+            ]),
           ]),
-        ]),
-        h('div', { class: 'field field-xs validade-qtd-field', style: 'margin:0;' }, [h('label', {}, 'Qtd.'), qtdInput]),
-        delBtn,
-      ]);
-    });
-    wrap.appendChild(h('div', { style: 'display:flex;flex-direction:column;gap:8px;margin-top:14px;' }, linhas));
+          h('div', { class: 'field field-xs validade-qtd-field', style: 'margin:0;' }, [h('label', {}, 'Qtd.'), qtdInput]),
+        ]);
+        row.addEventListener('click', () => toggleSelect(r.id));
+        return row;
+      });
+      wrap.appendChild(h('div', { style: 'display:flex;flex-direction:column;gap:8px;margin-top:14px;' }, linhas));
+    }
+
+    // Mesma Barra/Cápsula de Ações Inferior usada em todos os restantes
+    // módulos da app — garante que o botão de adicionar está sempre visível
+    // e no mesmo sítio a que a equipa já está habituada.
+    wrap.appendChild(buildBottomActionBar({
+      selectedCount: selectedIds.size,
+      addLabel: 'Novo Registo de Validade',
+      onAdd: openNew,
+      onEdit: openEditSelected,
+      onDelete: removeSelecionados,
+    }));
+
     return wrap;
   }
 
@@ -6750,7 +6884,7 @@ function buildEventoDiaModal(tipo, dateISO, evento, onSaved) {
   }
 
   function buildBookingForm() {
-    const nomeInput = h('input', { class: 'input', placeholder: 'Nome do Cliente' });
+    const nomeInput = h('input', { class: 'input', placeholder: 'Nome do Cliente', maxlength: '100' });
     nomeInput.value = formDraft.nomeCliente || '';
     nomeInput.addEventListener('input', () => { formDraft.nomeCliente = nomeInput.value; });
     const fichaInput = h('input', { class: 'input', placeholder: 'Nº Ficha' });
@@ -7435,7 +7569,7 @@ function buildObjetivosPage(container, goTo, embedded) {
     const grid = h('div', { class: 'form-grid' }, camposEl);
 
     const linhasEl = draft.produtos.map((p, idx) => {
-      const nomeInput = h('input', { class: 'input doc-item-nome', placeholder: 'Nome do Produto' });
+      const nomeInput = h('input', { class: 'input doc-item-nome', placeholder: 'Nome do Produto', maxlength: '150' });
       nomeInput.value = p.nome || '';
       nomeInput.addEventListener('input', () => { p.nome = nomeInput.value; });
       const metaInput = h('input', { class: 'input doc-item-preco', type: 'number', min: '0', placeholder: 'Meta (un.)' });
@@ -7911,7 +8045,7 @@ function buildDeclaracaoDespesasPage(container, goTo) {
 
     if (draft.discriminado) {
       const linhasEl = draft.itens.map((it, idx) => {
-        const nomeProdInput = h('input', { class: 'input doc-item-nome', placeholder: 'Nome do Produto' });
+        const nomeProdInput = h('input', { class: 'input doc-item-nome', placeholder: 'Nome do Produto', maxlength: '150' });
         nomeProdInput.value = it.nome;
         nomeProdInput.addEventListener('input', () => { it.nome = nomeProdInput.value; });
         const precoInput = h('input', { class: 'input doc-item-preco', type: 'number', step: '0.01', min: '0', placeholder: 'Preço €' });
