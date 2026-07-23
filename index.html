@@ -971,6 +971,16 @@
     font-family:inherit;cursor:not-allowed;}
   .calc-readonly:focus{outline:none;box-shadow:none;}
   .calc-divider{height:1px;background:rgba(0,0,0,.08);margin:14px 0;}
+  /* Rede de segurança: nunca mostrar as setinhas de incremento em nenhum
+     input numérico só de leitura/desativado da app (ex: campos calculados
+     automaticamente) — alguns browsers continuam a desenhá-las mesmo com
+     disabled/readonly. */
+  input[readonly]::-webkit-outer-spin-button,
+  input[readonly]::-webkit-inner-spin-button,
+  input:disabled::-webkit-outer-spin-button,
+  input:disabled::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  input[readonly][type=number],
+  input:disabled[type=number]{-moz-appearance:textfield;}
 
   /* Modal (edição rápida a partir da Pesquisa de Pedidos) */
   .modal-overlay{position:fixed;inset:0;background:rgba(13,37,48,.45);z-index:60;
@@ -2480,6 +2490,32 @@ async function dbClearNotaUtilizador(userId, modulo) {
     if (error) { console.error('[Supabase] erro ao limpar nota:', error.message); return false; }
     return true;
   } catch (e) { console.error('[Supabase] erro de rede ao limpar nota:', formatarErroSeguro(e)); return false; }
+}
+/* ---- Dicionário de CNP (dicionario_cnp) — associa CNP/Código a um nome de
+   produto, para o campo "Produto" dos Erros de Stock se autopreencher assim
+   que se escreve/confirma um CNP já conhecido. Aprende sozinho: sempre que
+   um Erro de Stock novo é gravado com CNP + Produto preenchidos à mão, o par
+   fica guardado aqui para a próxima vez. ---- */
+async function dbBuscarProdutoPorCnp(cnp) {
+  const cnpNorm = String(cnp || '').trim();
+  if (!sb || !cnpNorm) return null;
+  try {
+    const { data, error } = await sb.from('dicionario_cnp').select('nome_produto').eq('cnp', cnpNorm).maybeSingle();
+    if (error) { console.error('[Supabase] erro ao consultar dicionario_cnp:', error.message); return null; }
+    const limpo = data ? sanitizarSupabase(data) : null;
+    return (limpo && limpo.nome_produto) ? String(limpo.nome_produto) : null;
+  } catch (e) { console.error('[Supabase] erro de rede ao consultar dicionario_cnp:', formatarErroSeguro(e)); return null; }
+}
+async function dbUpsertDicionarioCnp(cnp, nomeProduto) {
+  const cnpNorm = String(cnp || '').trim();
+  const nomeNorm = String(nomeProduto || '').trim();
+  if (!sb || !cnpNorm || !nomeNorm) return false;
+  try {
+    const { error } = await sb.from('dicionario_cnp')
+      .upsert({ cnp: cnpNorm, nome_produto: nomeNorm }, { onConflict: 'cnp' });
+    if (error) { console.error('[Supabase] erro ao gravar no dicionario_cnp:', error.message); return false; }
+    return true;
+  } catch (e) { console.error('[Supabase] erro de rede ao gravar no dicionario_cnp:', formatarErroSeguro(e)); return false; }
 }
 // Dono da nota no Supabase: 'equipa' (valor fixo) para o bloco partilhado
 // pela equipa toda (ex: Página Inicial), ou o id do próprio utilizador para
@@ -4805,6 +4841,30 @@ function buildErrosPage(container, goTo) {
     draft = Object.assign({}, r); editingId = r.id; formError = ''; showForm = true; rerender();
   }
   function toggleSelect(id) { if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id); rerender(); }
+  // Campo CNP/Código com autopreenchimento: ao sair do campo (blur/change)
+  // com um CNP novo, consulta o dicionario_cnp e, se encontrar, preenche
+  // sozinho o Nome do Produto — mas nunca substitui um nome que a pessoa já
+  // tenha escrito à mão. Se não encontrar nada, o campo Produto continua
+  // normalmente editável.
+  function buildCnpAutoFillField(f) {
+    const control = h('input', { class: 'input', type: 'text', placeholder: f.placeholder || 'Ex: 1234567' });
+    control.value = draft.cnp || '';
+    control.addEventListener('input', () => { draft.cnp = control.value; });
+    control.addEventListener('change', async () => {
+      const cnpAtual = String(draft.cnp || '').trim();
+      if (!cnpAtual || String(draft.produto || '').trim()) return;
+      const nomeEncontrado = await dbBuscarProdutoPorCnp(cnpAtual);
+      // Confirma que o CNP não mudou entretanto e que o Produto continua
+      // vazio antes de preencher — protege contra respostas tardias.
+      if (nomeEncontrado && !String(draft.produto || '').trim() && String(draft.cnp || '').trim() === cnpAtual) {
+        draft.produto = nomeEncontrado;
+        rerender();
+      }
+    });
+    const kids = [h('label', {}, f.label), control];
+    if (f.helperText) kids.push(h('p', { class: 'field-helper-text' }, f.helperText));
+    return h('div', { class: 'field' + (f.size ? ' field-' + f.size : '') }, kids);
+  }
   async function submit() {
     const missing = checkRequiredFields(draft, errosSchema);
     if (missing.length) {
@@ -4837,7 +4897,16 @@ function buildErrosPage(container, goTo) {
       else formError = `Não foi possível adicionar o registo. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
     }
     saving = false;
-    if (!formError) showForm = false;
+    if (!formError) {
+      showForm = false;
+      // Ensina o dicionário: se ficou um CNP + Nome do Produto preenchidos
+      // (escritos à mão ou confirmados), grava/atualiza o par no
+      // dicionario_cnp para autopreencher da próxima vez que este CNP
+      // aparecer — feito em segundo plano, sem bloquear nem exigir sucesso.
+      if (String(draft.cnp || '').trim() && String(draft.produto || '').trim()) {
+        dbUpsertDicionarioCnp(draft.cnp, draft.produto);
+      }
+    }
     rerender();
   }
   function cancel() { formError = ''; showForm = false; rerender(); }
@@ -4937,6 +5006,7 @@ function buildErrosPage(container, goTo) {
       wrap.appendChild(buildRecordForm(errosSchema, draft, {
         editing: !!editingId, onSubmit: submit, onCancel: cancel,
         errorMessage: formError, saving,
+        fieldOverrides: { cnp: buildCnpAutoFillField },
         onConclude: (editingId && pendenteAgora) ? () => correct(editingId) : null, concludeLabel: 'Marcar como Corrigido',
         onRevert: (editingId && draft.estado === 'Corrigido') ? () => revertCorrection(editingId) : null,
       }));
@@ -9164,11 +9234,26 @@ function buildEntregasPage(container, goTo) {
     });
     return h('div', { class: 'field span2' }, [h('label', {}, f.label), h('div', { style: 'display:flex;gap:10px;margin-top:2px;' }, btns)]);
   }
+  // Troco: campo só de leitura, calculado automaticamente (Valor Entregue −
+  // Valor a Pagar). Em vez de um <input type="number" disabled> — que em
+  // vários browsers continua a mostrar as setinhas de incremento mesmo
+  // desativado — usa-se aqui um <input type="text" readonly>, formatado em
+  // euros com vírgula decimal, com o mesmo estilo "só consulta" (fundo
+  // acinzentado, negrito, cursor not-allowed) dos calculadores da app.
+  function buildTrocoReadonlyField(f, draft) {
+    const temValor = draft.troco !== '' && draft.troco !== undefined && draft.troco !== null;
+    const control = h('input', { class: 'input calc-readonly', type: 'text', readonly: 'readonly', inputmode: 'none', placeholder: '0,00 €' });
+    control.value = temValor ? `${Number(draft.troco).toFixed(2).replace('.', ',')} €` : '';
+    const kids = [h('label', {}, f.label), control];
+    if (f.helperText) kids.push(h('p', { class: 'field-helper-text' }, f.helperText));
+    return h('div', { class: 'field' + (f.size ? ' field-' + f.size : '') }, kids);
+  }
   function entregasFieldOverrides() {
     return {
       morada: buildMoradaComMapsField,
       empresaParceiraId: buildEmpresaParceiraField,
       estadoPagamento: buildEstadoPagamentoField,
+      troco: buildTrocoReadonlyField,
     };
   }
 
