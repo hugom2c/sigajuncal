@@ -168,6 +168,47 @@
     border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13.5px;line-height:1.5;
     color:var(--pharm-900);background:#fff;}
   .nota-rapida-textarea:disabled,.nota-rapida-textarea:read-only{opacity:.6;background:var(--pharm-50);}
+  /* Bloco de Notas por tópicos — lista de recados curtos, cada um com o
+     nome de quem escreveu e um botão de eliminar; propositadamente sem
+     nenhuma cor/etiqueta de urgência, para essa função continuar a ser
+     exclusiva dos Lembretes. */
+  .nota-topicos-lista{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;
+    margin-bottom:10px;}
+  .nota-topico-row{display:flex;align-items:flex-start;gap:9px;background:#fff;border:1px solid var(--pharm-100);
+    border-radius:9px;padding:8px 10px;}
+  .nota-topico-dot{width:7px;height:7px;border-radius:50%;background:#eab308;flex-shrink:0;margin-top:6px;}
+  .nota-topico-texto{flex:1;font-size:13px;line-height:1.45;color:var(--pharm-900);word-break:break-word;}
+  .nota-topico-autor{font-weight:700;color:var(--pharm-500);}
+  .nota-topico-del{flex-shrink:0;background:none;border:none;cursor:pointer;color:var(--pharm-400);
+    padding:2px;border-radius:6px;display:flex;}
+  .nota-topico-del:hover{color:var(--red);background:var(--red-bg);}
+  .nota-topico-add-row{display:flex;gap:8px;}
+  .nota-topico-add-row .input{flex:1;}
+
+  /* Validades — lista de produtos a escoar prioritariamente */
+  .validade-item-row{display:flex;align-items:center;gap:10px;}
+  .validade-item-urgente{border-left:4px solid var(--red);background:var(--red-bg);}
+  .validade-qtd-field{flex-shrink:0;width:74px;}
+  .validade-qtd-field label{font-size:10px;}
+  .validade-qtd-input{text-align:center;padding:8px 4px;}
+
+  /* Widget de Validades na Página Inicial — ticker/carrossel a rodar
+     sozinho, para dar visibilidade contínua sem ocupar espaço permanente. */
+  .validades-ticker-card{margin-top:14px;background:#fef2f2;border:1px solid #fecaca;overflow:hidden;cursor:pointer;}
+  .validades-ticker-header{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;
+    color:#991b1b;margin-bottom:10px;}
+  .validades-ticker-viewport{position:relative;height:46px;overflow:hidden;}
+  .validades-ticker-item{position:absolute;inset:0;display:flex;align-items:center;gap:10px;
+    padding:6px 4px;opacity:0;transform:translateY(8px);
+    transition:opacity .5s ease,transform .5s ease;pointer-events:none;}
+  .validades-ticker-item.ativo{opacity:1;transform:translateY(0);pointer-events:auto;}
+  .validades-ticker-dot{width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0;}
+  .validades-ticker-texto{font-size:13px;color:#7f1d1d;font-weight:600;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .validades-ticker-texto strong{font-weight:800;}
+  .validades-ticker-dots{display:flex;gap:5px;justify-content:center;margin-top:8px;}
+  .validades-ticker-progress-dot{width:6px;height:6px;border-radius:50%;background:#fecaca;transition:background .3s;}
+  .validades-ticker-progress-dot.ativo{background:var(--red);}
 
   /* Documentos — linha de produto discriminado */
   .doc-item-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;}
@@ -631,16 +672,6 @@
   .badge-purple{background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe;}
   .premios-mural-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;}
   .premio-mural-card{display:flex;flex-direction:column;}
-  .mapa-tarefas-fab{position:fixed;bottom:88px;right:24px;width:48px;height:48px;border-radius:50%;
-    background:var(--blue);color:#fff;border:none;display:flex;align-items:center;justify-content:center;
-    box-shadow:0 3px 10px rgba(37,99,235,.4);cursor:pointer;z-index:60;
-    transition:background-color .15s ease,transform .15s ease,box-shadow .15s ease;}
-  .mapa-tarefas-fab:hover{background:#1d4ed8;transform:scale(1.05);box-shadow:0 5px 14px rgba(37,99,235,.5);}
-  .mapa-tarefas-fab:active{transform:scale(0.96);}
-  /* Sobe acima da assinatura fixa no rodapé (.app-signature, bottom:14px) para
-     nunca lhe tapar o texto — sobretudo em ecrãs pequenos, onde a barra seria
-     mais apertada. */
-  @media (max-width:1023px){.mapa-tarefas-fab{bottom:calc(80px + env(safe-area-inset-bottom));}}
   .badge-orange{background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-bd);}
   .badge-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
   .badge-red{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd);}
@@ -896,6 +927,12 @@
   .agenda-slot-bloqueado .agenda-slot-label{color:var(--pharm-500);font-style:italic;}
   .agenda-slot-ocupado{background:#eff6ff;}
   .agenda-slot-encaixe{background:#fdf4ff;border:1px dashed #d8b4fe;}
+  /* Slots "arrastados" por uma marcação mais longa (ex: 60min a partir das
+     12:15) — ligados visualmente à marcação principal por uma barra lateral
+     na mesma cor do slot ocupado, mais estreitos/discretos que a linha
+     principal. */
+  .agenda-slot-continuacao{background:#eff6ff;border-left:3px solid var(--blue-bd);opacity:.85;}
+  .agenda-slot-continuacao .agenda-slot-label{font-style:italic;}
   .agenda-slot-confirmada{background:#dcfce7 !important;}
   .agenda-slot-confirmada .agenda-slot-label{color:#15803d;}
   .agenda-slot-cancelada{background:#fee2e2 !important;}
@@ -1296,6 +1333,7 @@ const NAV_SECTIONS = [
     { key: 'erros', label: 'Erros de Stock', icon: 'alert' },
     { key: 'recolhas', label: 'Recolhas', icon: 'returnBox' },
     { key: 'calculadoras', label: 'Calculadoras PVP', icon: 'calculator' },
+    { key: 'validades', label: 'Validades', icon: 'clock' },
   ] },
   { title: 'Gestão', items: [
     { key: 'reclamacoes', label: 'Reclamações', icon: 'bookOpen', tone: 'red' },
@@ -1349,7 +1387,7 @@ const manipuladosSchema = [
   { name: 'estado', label: 'Estado', type: 'select', options: ESTADOS, size: 'sm' },
   { name: 'rota', label: 'Rota', type: 'checkbox' },
   { name: 'aviso', label: 'Aviso ao cliente', type: 'checkbox' },
-  { name: 'obs', label: 'Observações', type: 'textarea', col: 2 },
+  { name: 'obs', label: 'Observações', type: 'textarea', col: 2, maxLength: 200 },
 ];
 
 const ortopediaSchema = [
@@ -1371,7 +1409,7 @@ const ortopediaSchema = [
   { name: 'medidaBarrigaPerna', label: 'Medida — Barriga da Perna (cm)', type: 'number', step: '0.1', size: 'xs' },
   { name: 'medidaCoxa', label: 'Medida — Coxa (cm)', type: 'number', step: '0.1', size: 'xs' },
   { name: 'medidaAlturaPerna', label: 'Medida — Altura da Perna (cm)', type: 'number', step: '0.1', size: 'xs' },
-  { name: 'obs', label: 'Observações', type: 'textarea', col: 2 },
+  { name: 'obs', label: 'Observações', type: 'textarea', col: 2, maxLength: 200 },
 ];
 
 const ervanariaSchema = [
@@ -1385,7 +1423,7 @@ const ervanariaSchema = [
   { name: 'produto', label: 'Produto', type: 'text', col: 2 },
   { name: 'estado', label: 'Estado', type: 'select', options: ESTADOS, size: 'sm' },
   { name: 'aviso', label: 'Aviso ao cliente', type: 'checkbox' },
-  { name: 'obs', label: 'Observações', type: 'textarea', col: 2 },
+  { name: 'obs', label: 'Observações', type: 'textarea', col: 2, maxLength: 200 },
 ];
 
 // Veterinária tem o seu próprio esquema (Fornecedor sugere "Siloal")
@@ -1400,7 +1438,7 @@ const veterinariaSchema = [
   { name: 'produto', label: 'Produto', type: 'text', col: 2 },
   { name: 'estado', label: 'Estado', type: 'select', options: ESTADOS, size: 'sm' },
   { name: 'aviso', label: 'Aviso ao cliente', type: 'checkbox' },
-  { name: 'obs', label: 'Observações', type: 'textarea', col: 2 },
+  { name: 'obs', label: 'Observações', type: 'textarea', col: 2, maxLength: 200 },
 ];
 
 // Outros Fornecedores partilha a mesma estrutura de campos da Ervanária
@@ -1415,7 +1453,7 @@ const outrosSchema = [
   { name: 'produto', label: 'Produto', type: 'text', col: 2 },
   { name: 'estado', label: 'Estado', type: 'select', options: ESTADOS, size: 'sm' },
   { name: 'aviso', label: 'Aviso ao cliente', type: 'checkbox' },
-  { name: 'obs', label: 'Observações', type: 'textarea', col: 2 },
+  { name: 'obs', label: 'Observações', type: 'textarea', col: 2, maxLength: 200 },
 ];
 
 /* =================================================================
@@ -1764,7 +1802,7 @@ const mapa48hSchema = [
   { name: 'avisado', label: 'Avisado', type: 'select', options: ['Sim', 'Não'], size: 'xs' },
   { name: 'estadoEntrega', label: 'Estado', type: 'select', options: ['Já entregou', 'Pendente'], size: 'sm' },
   { name: 'dataLeitura', label: 'Data de Leitura', type: 'date', size: 'xs' },
-  { name: 'observacoes', label: 'Observações', type: 'textarea', col: 2 },
+  { name: 'observacoes', label: 'Observações', type: 'textarea', col: 2, maxLength: 200 },
 ];
 
 // Entregas — separação total entre Farmácia Juncal e Farmácia Boa Nova
@@ -1854,11 +1892,16 @@ function agendaGerarSlots() {
 const AGENDA_SLOTS_PADRAO = agendaGerarSlots();
 
 function agendaEhNutricao(prestadorKey) { return prestadorKey === 'nutricao_tatiana' || prestadorKey === 'nutricao_joana'; }
+function agendaEhDepilacao(prestadorKey) { return prestadorKey === 'depilacao_laser'; }
+const DEPILACAO_DURACOES_MIN = [15, 30, 45, 60, 90, 120];
 // Duração automática: Nutrição 1ª Consulta = 30 min (2 slots), Seguimento =
-// 15 min (1 slot); Massagem = sempre 60 min (4 slots); restantes = 15 min.
-function agendaDuracaoPorTipo(prestadorKey, tipoConsulta) {
+// 15 min (1 slot); Massagem = sempre 60 min (4 slots); Depilação a Laser /
+// HIFU = escolhida à mão pela equipa (duracaoManual, 15 a 120 min, conforme
+// o serviço/zonas); restantes = 15 min.
+function agendaDuracaoPorTipo(prestadorKey, tipoConsulta, duracaoManual) {
   if (prestadorKey === 'massagem_marco') return 60;
   if (agendaEhNutricao(prestadorKey)) return (tipoConsulta || '').includes('1ª Consulta') ? 30 : 15;
+  if (agendaEhDepilacao(prestadorKey)) return duracaoManual || 15;
   return 15;
 }
 function agendaNumSlots(duracaoMin) { return Math.max(1, Math.round((duracaoMin || 15) / AGENDA_SLOT_MIN)); }
@@ -1935,12 +1978,12 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
     return STATE.agendaMarcacoes.filter(m => m.prestadorKey === prestadorKey && m.data === dateISO);
   }
 
-  function openNovaMarcacao(horaPreenchida) {
-    formDraft = { hora: horaPreenchida || AGENDA_SLOTS_PADRAO[0], tipoConsulta: agendaEhNutricao(prestadorKey) ? TIPOS_CONSULTA_NUTRICAO[0] : '', nomeCliente: '', contacto: '', aviso: false, observacoes: '' };
+  function openNovaMarcacao(horaPreenchida, forcarEncaixe) {
+    formDraft = { hora: horaPreenchida || AGENDA_SLOTS_PADRAO[0], tipoConsulta: agendaEhNutricao(prestadorKey) ? TIPOS_CONSULTA_NUTRICAO[0] : '', duracaoManual: 15, nomeCliente: '', contacto: '', aviso: false, observacoes: '', forcarEncaixe: !!forcarEncaixe };
     formError = ''; showForm = 'nova'; render();
   }
   function openEncaixe() {
-    formDraft = { hora: '', tipoConsulta: agendaEhNutricao(prestadorKey) ? TIPOS_CONSULTA_NUTRICAO[0] : '', nomeCliente: '', contacto: '', aviso: false, observacoes: '' };
+    formDraft = { hora: '', tipoConsulta: agendaEhNutricao(prestadorKey) ? TIPOS_CONSULTA_NUTRICAO[0] : '', duracaoManual: 15, nomeCliente: '', contacto: '', aviso: false, observacoes: '' };
     formError = ''; showForm = 'encaixe'; render();
   }
   function cancelForm() { showForm = false; formError = ''; render(); }
@@ -2003,8 +2046,12 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
         formError = 'Indique a hora do encaixe no formato HH:MM (ex: 14:10).'; render(); return;
       }
     }
-    const duracaoMin = agendaDuracaoPorTipo(prestadorKey, formDraft.tipoConsulta);
-    const conflito = agendaConflito(prestadorKey, dateISO, formDraft.hora, duracaoMin);
+    const duracaoMin = agendaDuracaoPorTipo(prestadorKey, formDraft.tipoConsulta, formDraft.duracaoManual);
+    // "Forçar Encaixe": quando a marcação nasce explicitamente a partir do
+    // botão de um slot já ocupado por uma marcação anterior mais longa, a
+    // equipa já sabe e decidiu sobrepor-se de propósito — não faz sentido
+    // barrar com o aviso de conflito.
+    const conflito = formDraft.forcarEncaixe ? null : agendaConflito(prestadorKey, dateISO, formDraft.hora, duracaoMin);
     if (conflito) {
       formError = `ATENÇÃO: Este horário colide com a marcação das ${conflito.hora}${conflito.nomeCliente ? ' (' + conflito.nomeCliente + ')' : ''}. Escolha outro horário.`;
       render();
@@ -2146,6 +2193,7 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
 
   function buildForm() {
     const isNutricao = agendaEhNutricao(prestadorKey);
+    const isDepilacao = agendaEhDepilacao(prestadorKey);
     const nomeInput = h('input', { class: 'input', placeholder: 'Nome do Cliente' });
     nomeInput.value = formDraft.nomeCliente || '';
     nomeInput.addEventListener('input', () => { formDraft.nomeCliente = nomeInput.value; });
@@ -2163,6 +2211,10 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
     obsInput.addEventListener('input', () => { formDraft.observacoes = obsInput.value; });
 
     const campos = [];
+    if (formDraft.forcarEncaixe) {
+      campos.push(h('p', { class: 'field-helper-text', style: 'color:var(--orange);font-weight:700;grid-column:1/-1;' },
+        `⚠ Forçar Encaixe: este horário já está ocupado por outra marcação — vai ficar sobreposto de propósito.`));
+    }
     if (showForm === 'encaixe') {
       const horaInput = h('input', { class: 'input', placeholder: 'Hora (ex: 14:10)' });
       horaInput.value = formDraft.hora || '';
@@ -2180,6 +2232,17 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
       tipoSelect.addEventListener('change', () => { formDraft.tipoConsulta = tipoSelect.value; render(); });
       campos.push(h('div', { class: 'field span2' }, [h('label', {}, 'Tipo de Consulta'), tipoSelect]));
     }
+    if (isDepilacao) {
+      const servicoInput = h('input', { class: 'input', maxlength: '80', placeholder: 'Ex: Buço + Axilas, Completa, Rosto, HIFU...' });
+      servicoInput.value = formDraft.tipoConsulta || '';
+      servicoInput.addEventListener('input', () => { formDraft.tipoConsulta = servicoInput.value.slice(0, 80); });
+      campos.push(h('div', { class: 'field span2' }, [h('label', {}, 'Serviço / Zonas'), servicoInput]));
+
+      const duracaoSelect = h('select', { class: 'select' }, DEPILACAO_DURACOES_MIN.map(d => h('option', { value: String(d), selected: formDraft.duracaoManual === d ? 'selected' : undefined }, `${d} min`)));
+      duracaoSelect.value = String(formDraft.duracaoManual || 15);
+      duracaoSelect.addEventListener('change', () => { formDraft.duracaoManual = parseInt(duracaoSelect.value, 10); render(); });
+      campos.push(h('div', { class: 'field field-sm' }, [h('label', {}, 'Duração (minutos)'), duracaoSelect]));
+    }
     const avisoCb = h('input', { type: 'checkbox', checked: !!formDraft.aviso });
     avisoCb.addEventListener('change', () => { formDraft.aviso = avisoCb.checked; });
     const avisoField = h('label', { class: 'checkbox-field' }, [avisoCb, h('span', {}, 'Aviso ao cliente')]);
@@ -2189,7 +2252,7 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
     campos.push(avisoField);
     campos.push(h('div', { class: 'field span2' }, [h('label', {}, 'Observações'), obsInput]));
 
-    const duracaoInfo = h('p', { class: 'field-helper-text' }, `Duração desta marcação: ${agendaDuracaoPorTipo(prestadorKey, formDraft.tipoConsulta)} minutos.`);
+    const duracaoInfo = h('p', { class: 'field-helper-text' }, `Duração desta marcação: ${agendaDuracaoPorTipo(prestadorKey, formDraft.tipoConsulta, formDraft.duracaoManual)} minutos.`);
     const saveBtn = h('button', { class: 'btn btn-primary', onclick: saving ? null : () => requireAuth(submitForm), disabled: saving ? 'disabled' : undefined }, saving ? 'A guardar…' : 'Confirmar Marcação');
     const cancelBtn = h('button', { class: 'btn btn-secondary', onclick: cancelForm }, 'Cancelar');
 
@@ -2232,7 +2295,31 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
         return;
       }
       const primeiraLinha = agendaHorariosOcupados(m.hora, m.duracaoMin || 15)[0] === hora;
-      if (!primeiraLinha) return;
+      if (!primeiraLinha) {
+        // Slot "arrastado" por uma marcação mais longa que começou antes
+        // (ex: 12:15 com 60min bloqueia também 12:30/12:45/13:00) — mostra-se
+        // sempre associado visualmente à marcação principal e ao serviço,
+        // mas a equipa mantém controlo total: um clique em "Forçar Encaixe"
+        // abre logo uma marcação nova aqui, ignorando o bloqueio automático.
+        let node;
+        if (m.tipoLinha === 'bloqueado') {
+          linhasGrade.push({ hora, node: null }); // vagas bloqueadas nunca ocupam mais de 1 slot — nunca deveria cair aqui
+          return;
+        }
+        const acoes = [];
+        if (!isPast) {
+          const forcarBtn = h('button', { class: 'btn-fab-sm tone-orange', title: 'Forçar Encaixe neste horário', 'aria-label': 'Forçar Encaixe' }, Icon('lockOpen', { size: 12, strokeWidth: 2.2 }));
+          forcarBtn.addEventListener('click', () => requireAuth(() => openNovaMarcacao(hora, true)));
+          acoes.push(forcarBtn);
+        }
+        node = h('div', { class: 'agenda-slot-row agenda-slot-continuacao' + (isPast ? ' agenda-vaga-passada' : '') }, [
+          h('span', { class: 'agenda-slot-hora' }, hora),
+          h('span', { class: 'agenda-slot-label cell-muted' }, `↳ Ocupado — ${m.nomeCliente || '—'}${m.tipoConsulta ? ' · ' + m.tipoConsulta : ''}`),
+          h('div', { class: 'row-actions' }, acoes),
+        ]);
+        linhasGrade.push({ hora, node });
+        return;
+      }
       let node;
       if (m.tipoLinha === 'bloqueado') {
         const acoes = [];
@@ -2535,106 +2622,90 @@ function gravarNotaFallback(chave, valor) {
 function apagarNotaFallback(chave) {
   try { localStorage.removeItem(chave); } catch (e) { /* localStorage indisponível — ignora silenciosamente */ }
 }
+// Bloco de Notas por tópicos: cada nota é um item curto e individual (não
+// um texto corrido), com o nome de quem escreveu acrescentado no fim e um
+// botão para eliminar — pensado para recados rápidos ("Falta xarope X",
+// "Ligar ao fornecedor Y"), nunca para textos longos. De propósito SEM
+// nenhuma classificação de urgência/prioridade, para não competir com os
+// Lembretes, que são o sítio certo para isso.
+const NOTA_TOPICO_MAX_CHARS = 140;
 function buildNotaRapidaWidget(modulo, titulo, opts) {
   const shared = !!(opts && opts.shared);
-  let texto = '';
-  let debounceTimer = null;
+  let topicos = [];
+  let loading = true;
 
   const wrap = h('div', { class: 'card card-pad nota-rapida-card' });
   const statusEl = h('span', { class: 'nota-rapida-status' }, '');
-  const textarea = h('textarea', { class: 'nota-rapida-textarea', rows: '8', placeholder: 'Escreva aqui a sua nota rápida — sincroniza automaticamente em qualquer dispositivo...' });
+  const listEl = h('div', { class: 'nota-topicos-lista' });
 
   function setStatus(txt) { statusEl.textContent = txt; }
   function ownerId() { return shared ? NOTA_PARTILHADA_OWNER : (activeUser ? String(activeUser.id) : null); }
 
+  function renderLista() {
+    clear(listEl);
+    if (loading) { listEl.appendChild(h('p', { class: 'cell-muted', style: 'margin:4px 0;' }, 'A carregar…')); return; }
+    if (!topicos.length) {
+      listEl.appendChild(h('p', { class: 'cell-muted', style: 'margin:4px 0;' }, 'Sem tópicos por agora.'));
+      return;
+    }
+    topicos.forEach(t => {
+      const delBtn = h('button', { class: 'nota-topico-del', title: 'Eliminar este tópico', 'aria-label': 'Eliminar' }, Icon('x', { size: 12, strokeWidth: 2.4 }));
+      delBtn.addEventListener('click', () => requireAuth(() => removerTopico(t.id)));
+      listEl.appendChild(h('div', { class: 'nota-topico-row' }, [
+        h('span', { class: 'nota-topico-dot' }),
+        h('span', { class: 'nota-topico-texto' }, [t.texto, t.autor ? h('span', { class: 'nota-topico-autor' }, ` — ${t.autor}`) : null]),
+        delBtn,
+      ]));
+    });
+  }
+
   async function carregar() {
     const owner = ownerId();
-    if (!owner) return;
-    const chaveFallback = notaFallbackKey(modulo, owner);
+    if (!owner) { loading = false; renderLista(); return; }
     setStatus('A carregar…');
     const resultado = await dbFetchNotaUtilizador(owner, modulo);
-    if (resultado.ok) {
-      // Se entretanto ficou um rascunho local por sincronizar (ex: foi
-      // escrito offline), esse texto mais recente prevalece sobre o que
-      // está no servidor, e tenta-se logo voltar a sincronizá-lo.
-      const local = lerNotaFallback(chaveFallback);
-      if (local !== null) {
-        texto = local;
-        textarea.value = texto;
-        setStatus('A sincronizar rascunho local…');
-        const ok = await dbUpsertNotaUtilizador(owner, modulo, texto);
-        if (ok) { apagarNotaFallback(chaveFallback); setStatus('Sincronizado'); }
-        else setStatus('Guardado localmente — sincroniza quando a ligação voltar.');
-      } else {
-        texto = resultado.nota ? (resultado.nota.texto || '') : '';
-        textarea.value = texto;
-        setStatus(texto ? 'Sincronizado' : '');
-      }
-    } else {
-      // Sem ligação ao Supabase (tabela em falta, sem rede, etc.) — usa o
-      // rascunho local como recurso, para nunca mostrar a caixa vazia por
-      // cima de texto que a pessoa já tinha escrito.
-      const local = lerNotaFallback(chaveFallback);
-      texto = local || '';
-      textarea.value = texto;
-      setStatus(texto ? 'Guardado localmente (sem ligação ao servidor)' : 'Sem ligação ao servidor — a nota vai gravar-se localmente até reconectar.');
-    }
+    topicos = (resultado.ok && resultado.nota && Array.isArray(resultado.nota.topicos)) ? resultado.nota.topicos : [];
+    loading = false;
+    setStatus('');
+    renderLista();
   }
-
-  async function gravarAgora() {
+  async function gravar() {
     const owner = ownerId();
     if (!owner) return;
-    const chaveFallback = notaFallbackKey(modulo, owner);
-    setStatus('A guardar…');
-    const ok = await dbUpsertNotaUtilizador(owner, modulo, texto);
-    if (ok) {
-      apagarNotaFallback(chaveFallback); // já sincronizado — não precisa do rascunho local
-      setStatus('Sincronizado');
-    } else {
-      // Nunca perde o que foi escrito: fica em localStorage até conseguir sincronizar.
-      gravarNotaFallback(chaveFallback, texto);
-      setStatus('Guardado localmente — sincroniza quando a ligação voltar.');
-    }
+    const ok = await dbUpsertNotaUtilizador(owner, modulo, topicos);
+    setStatus(ok ? '' : 'Não foi possível sincronizar — tente novamente.');
   }
-  function agendarGravacao() {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    setStatus('A escrever…');
-    debounceTimer = setTimeout(gravarAgora, 1000);
+  function adicionarTopico(valorBruto) {
+    const limpo = String(valorBruto || '').trim().slice(0, NOTA_TOPICO_MAX_CHARS);
+    if (!limpo) return;
+    topicos = [{ id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, texto: limpo, autor: currentUserName() || '' }, ...topicos];
+    renderLista();
+    gravar();
+  }
+  function removerTopico(id) {
+    topicos = topicos.filter(t => t.id !== id);
+    renderLista();
+    gravar();
   }
 
-  textarea.addEventListener('input', () => { texto = textarea.value; agendarGravacao(); });
-
-  function limpar() {
-    const owner = ownerId();
-    if (!owner) return;
-    confirmDialog(shared
-      ? 'Apagar todo o texto desta nota partilhada, para toda a equipa? Esta ação não pode ser desfeita.'
-      : 'Apagar todo o texto desta nota, em todos os dispositivos? Esta ação não pode ser desfeita.', async () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      texto = '';
-      textarea.value = '';
-      apagarNotaFallback(notaFallbackKey(modulo, owner));
-      const ok = await dbClearNotaUtilizador(owner, modulo);
-      setStatus(ok ? '' : 'Limpo localmente — pode não ter sido removido do servidor ainda.');
-    }, { danger: true, confirmLabel: 'Apagar' });
+  const inputNovo = h('input', { class: 'input', maxlength: String(NOTA_TOPICO_MAX_CHARS), placeholder: `Escrever novo tópico (máx. ${NOTA_TOPICO_MAX_CHARS} carateres)...` });
+  const addBtn = h('button', { class: 'btn btn-primary', title: 'Adicionar tópico' }, [Icon('plus', { size: 14, strokeWidth: 2.4 }), ' Adicionar']);
+  function tentarAdicionar() {
+    requireAuth(() => {
+      adicionarTopico(inputNovo.value);
+      inputNovo.value = '';
+      inputNovo.focus();
+    });
   }
-  const clearBtn = h('button', { class: 'btn btn-secondary', style: 'color:var(--red);border-color:#fecaca;', onclick: () => requireAuth(limpar) }, 'Limpar Nota');
+  addBtn.addEventListener('click', tentarAdicionar);
+  inputNovo.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); tentarAdicionar(); } });
+  if (!activeUser) { inputNovo.disabled = true; inputNovo.placeholder = 'Inicie sessão para adicionar tópicos.'; }
 
-  // A nota partilhada carrega-se e fica visível mesmo em Modo Consulta (sem
-  // sessão) — só a EDIÇÃO exige login, tal como o resto da app. As notas
-  // pessoais nem chegam a carregar sem sessão iniciada.
-  if (shared || activeUser) carregar();
-  if (!activeUser) {
-    textarea.readOnly = true;
-    textarea.placeholder = shared
-      ? 'Inicie sessão para editar esta nota partilhada pela equipa.'
-      : 'Inicie sessão para usar o bloco de notas — a nota fica associada à sua conta e sincroniza entre dispositivos.';
-  }
-  textarea.addEventListener('focus', () => { if (!activeUser) requireAuth(() => render()); });
+  if (shared || activeUser) carregar(); else renderLista();
 
   wrap.appendChild(h('div', { class: 'nota-rapida-header' }, [Icon('pencil', { size: 15, strokeWidth: 2.2 }), h('span', {}, titulo), statusEl]));
-  wrap.appendChild(textarea);
-  wrap.appendChild(h('div', { class: 'form-actions', style: 'margin-top:10px;' }, [clearBtn]));
+  wrap.appendChild(listEl);
+  wrap.appendChild(h('div', { class: 'nota-topico-add-row' }, [inputNovo, addBtn]));
   return wrap;
 }
 
@@ -2793,6 +2864,7 @@ const TABLES = {
   objetivos: 'equipa_objetivos',
   usuarios: 'usuarios_app',
   empresasParceiras: 'empresas_parceiras',
+  validades: 'farmacia_validades',
 };
 
 function camelToSnake(s) { return s.replace(/[A-Z]/g, m => '_' + m.toLowerCase()); }
@@ -3307,6 +3379,7 @@ const STATE = {
   objetivos: [],
   usuarios: [],
   empresasParceiras: [],
+  validades: [],
   mensagemDia: null,
   mensagensChat: [],
   documentosEmitidos: [],
@@ -4554,6 +4627,52 @@ function buildMensagemDiaBanner(onSaved) {
   return banner;
 }
 
+// Ticker de Validades na Página Inicial — roda sozinho entre os produtos a
+// escoar prioritariamente. Segue o mesmo padrão dos badges de tempo das
+// Entregas: um único intervalo global que, a cada tick, avança todos os
+// tickers encontrados no DOM nesse momento (nunca acumula temporizadores
+// por widget, mesmo que a Página Inicial seja reconstruída várias vezes).
+function avancarValidadesTicker(viewport) {
+  const itens = viewport.querySelectorAll('.validades-ticker-item');
+  if (!itens.length) return;
+  const dotsWrap = viewport.parentElement ? viewport.parentElement.querySelector('.validades-ticker-dots') : null;
+  const dots = dotsWrap ? dotsWrap.querySelectorAll('.validades-ticker-progress-dot') : [];
+  let atual = parseInt(viewport.dataset.atual || '0', 10);
+  if (itens[atual]) itens[atual].classList.remove('ativo');
+  if (dots[atual]) dots[atual].classList.remove('ativo');
+  atual = (atual + 1) % itens.length;
+  itens[atual].classList.add('ativo');
+  if (dots[atual]) dots[atual].classList.add('ativo');
+  viewport.dataset.atual = String(atual);
+}
+function avancarTodosValidadesTickers() {
+  document.querySelectorAll('.validades-ticker-viewport').forEach(avancarValidadesTicker);
+}
+function buildValidadesTickerWidget(goTo) {
+  const lista = (STATE.validades || []).slice().sort((a, b) => (a.validade || '').localeCompare(b.validade || ''));
+  if (!lista.length) return null;
+  const itens = lista.map((r, i) => h('div', { class: 'validades-ticker-item' + (i === 0 ? ' ativo' : '') }, [
+    h('span', { class: 'validades-ticker-dot' }),
+    h('span', { class: 'validades-ticker-texto' }, [
+      h('strong', {}, r.produto || r.cnp || 'Produto'),
+      ` — Val. ${validadeFormatarMesAno(r.validade)}${r.localizacao ? ' · ' + r.localizacao : ''}`,
+    ]),
+  ]));
+  const viewport = h('div', { class: 'validades-ticker-viewport' }, itens);
+  viewport.dataset.atual = '0';
+  const card = h('div', { class: 'card card-pad validades-ticker-card clickable', title: 'Ver todas as Validades' }, [
+    h('div', { class: 'validades-ticker-header' }, [
+      Icon('clock', { size: 15, strokeWidth: 2.2 }),
+      h('span', {}, `${lista.length === 1 ? '1 produto' : lista.length + ' produtos'} a escoar prioritariamente`),
+    ]),
+    viewport,
+    lista.length > 1 ? h('div', { class: 'validades-ticker-dots' },
+      lista.map((_, i) => h('span', { class: 'validades-ticker-progress-dot' + (i === 0 ? ' ativo' : '') }))) : null,
+  ]);
+  card.addEventListener('click', () => goTo('validades'));
+  return card;
+}
+
 /* =================================================================
    CHAT INTERNO — mensagens em tempo real entre a equipa
 ================================================================= */
@@ -4771,6 +4890,13 @@ function buildHomepage(container, goTo) {
   ]));
 
   wrap.appendChild(buildMensagemDiaBanner(() => buildHomepage(container, goTo)));
+  // O ticker de Validades só aparece para quem realmente tem acesso ao
+  // módulo — os perfis restritos (Estafeta, Prestador de Serviço, Farmácia
+  // Boa Nova) nunca o veem, tal como o próprio menu "Validades".
+  if (!isEstafeta() && !isPrestadorServico() && !isBoaNovaOperador()) {
+    const validadesTicker = buildValidadesTickerWidget(goTo);
+    if (validadesTicker) wrap.appendChild(validadesTicker);
+  }
 
   const nextEv = proximoEvento();
   const vagasSpan = h('span', {}, '');
@@ -5135,6 +5261,233 @@ function buildErrosPage(container, goTo) {
         concludeLabel: 'Corrigir selecionado',
       }));
     }
+    return wrap;
+  }
+
+  rerender();
+}
+
+/* =================================================================
+   VALIDADES — registo de produtos a escoar prioritariamente (validade a
+   menos de 1 ano). Autopreenchimento do nome por CNP (mesmo dicionário dos
+   Erros de Stock) e widget rotativo na Página Inicial para dar visibilidade
+   à equipa no balcão.
+================================================================= */
+const VALIDADES_LIMITE_DIAS = 365;
+// "YYYY-MM" -> último dia desse mês, para comparar com a data limite (o
+// produto só deixa de poder ser registado depois de sair mesmo de validade
+// dentro do próximo ano).
+function validadeUltimoDia(mesAno) {
+  const partes = String(mesAno || '').split('-');
+  const ano = parseInt(partes[0], 10), mes = parseInt(partes[1], 10);
+  if (!ano || !mes) return null;
+  return new Date(ano, mes, 0, 23, 59, 59);
+}
+function validadeDentroDoLimite(mesAno) {
+  const limite = validadeUltimoDia(mesAno);
+  if (!limite) return false;
+  const dataLimite = new Date();
+  dataLimite.setDate(dataLimite.getDate() + VALIDADES_LIMITE_DIAS);
+  return limite <= dataLimite;
+}
+function validadeFormatarMesAno(mesAno) {
+  const partes = String(mesAno || '').split('-');
+  const ano = partes[0], mes = parseInt(partes[1], 10);
+  const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  if (!ano || !mes) return mesAno || '—';
+  return `${MESES[mes - 1]}/${ano}`;
+}
+function buildValidadesPage(container, goTo) {
+  let showForm = false;
+  let draft = { cnp: '', produto: '', validade: '', quantidade: '', localizacao: '' };
+  let formError = '';
+  let saving = false;
+  let searchQuery = '';
+
+  function rerender() { clear(container); container.appendChild(build()); }
+  function openNew() { draft = { cnp: '', produto: '', validade: '', quantidade: '', localizacao: '' }; formError = ''; showForm = true; rerender(); }
+  function cancel() { showForm = false; formError = ''; rerender(); }
+
+  function visibleValidades() {
+    const q = searchQuery.trim().toLowerCase();
+    let list = STATE.validades.slice();
+    if (q) list = list.filter(r => [r.produto, r.cnp, r.localizacao].some(v => (v || '').toLowerCase().includes(q)));
+    // Prioridade de escoamento: quem expira primeiro fica sempre no topo.
+    return list.sort((a, b) => (a.validade || '').localeCompare(b.validade || ''));
+  }
+
+  function buildCnpAutoFillField() {
+    const control = h('input', { class: 'input', type: 'text', id: 'validade-cnp-input', placeholder: 'Ex: 1234567 (ou passa o leitor de código de barras)' });
+    control.value = draft.cnp || '';
+    let debounceTimer = null;
+    let ultimoCnpConsultado = '';
+    async function consultarEPreencher() {
+      const cnpAtual = String(draft.cnp || '').trim();
+      if (!cnpAtual || cnpAtual === ultimoCnpConsultado) return;
+      ultimoCnpConsultado = cnpAtual;
+      if (String(draft.produto || '').trim()) return;
+      const nomeEncontrado = await dbBuscarProdutoPorCnp(cnpAtual);
+      if (String(draft.cnp || '').trim() !== cnpAtual || String(draft.produto || '').trim()) return;
+      if (nomeEncontrado) {
+        draft.produto = nomeEncontrado;
+        rerender();
+        setTimeout(() => {
+          const campoValidade = document.getElementById('validade-mes-input');
+          if (campoValidade) campoValidade.focus();
+        }, 0);
+      }
+    }
+    control.addEventListener('input', () => {
+      draft.cnp = control.value;
+      ultimoCnpConsultado = '';
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(consultarEPreencher, 350);
+    });
+    control.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); if (debounceTimer) clearTimeout(debounceTimer); consultarEPreencher(); }
+    });
+    control.addEventListener('change', () => { if (debounceTimer) clearTimeout(debounceTimer); consultarEPreencher(); });
+    control.addEventListener('blur', () => { if (debounceTimer) clearTimeout(debounceTimer); consultarEPreencher(); });
+    return h('div', { class: 'field field-xs' }, [h('label', {}, 'CNP / EAN / Código Interno'), control]);
+  }
+
+  async function submit() {
+    if (!String(draft.produto || '').trim() && !String(draft.cnp || '').trim()) {
+      formError = 'Por favor, preencha o Produto ou o CNP / Código.';
+      rerender();
+      return;
+    }
+    if (!String(draft.validade || '').trim()) {
+      formError = 'Por favor, indique a Data de Validade.';
+      rerender();
+      return;
+    }
+    if (!validadeDentroDoLimite(draft.validade)) {
+      formError = 'Apenas podem ser registados produtos com validade inferior a 1 ano a contar da data atual (foco no escoamento prioritário).';
+      rerender();
+      return;
+    }
+    formError = '';
+    saving = true; rerender();
+    const payload = {
+      cnp: draft.cnp || '', produto: draft.produto || '', validade: draft.validade,
+      quantidade: draft.quantidade === '' ? null : Math.max(0, parseInt(draft.quantidade, 10) || 0),
+      localizacao: draft.localizacao || '', responsavel: currentUserName(),
+    };
+    const created = await dbInsert('validades', payload);
+    saving = false;
+    if (created) {
+      STATE.validades = [created, ...STATE.validades];
+      showForm = false;
+      if (String(draft.cnp || '').trim() && String(draft.produto || '').trim()) dbUpsertDicionarioCnp(draft.cnp, draft.produto);
+    } else {
+      formError = `Não foi possível guardar. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
+    }
+    rerender();
+  }
+
+  function eliminar(r) {
+    confirmDialog(`Eliminar o registo de validade de "${r.produto || r.cnp || 'sem nome'}"?`, async () => {
+      const ok = await dbDelete('validades', r.id);
+      if (ok) { STATE.validades = STATE.validades.filter(x => x.id !== r.id); rerender(); }
+      else showDbErrorToast('Não foi possível eliminar o registo');
+    }, { danger: true, confirmLabel: 'Eliminar' });
+  }
+
+  // Atualiza só a Quantidade Disponível, diretamente na lista — sem precisar
+  // de abrir o formulário completo, para acompanhar as vendas ao balcão à
+  // medida que as embalagens vão saindo.
+  async function atualizarQuantidade(r, novoValor) {
+    const updated = await dbUpdate('validades', r.id, { quantidade: novoValor });
+    if (updated) STATE.validades = STATE.validades.map(x => x.id === r.id ? updated : x);
+    else showDbErrorToast('Não foi possível atualizar a quantidade');
+  }
+
+  function buildForm() {
+    const produtoInput = h('input', { class: 'input', placeholder: 'Nome do Produto' });
+    produtoInput.value = draft.produto || '';
+    produtoInput.addEventListener('input', () => { draft.produto = produtoInput.value; });
+
+    const validadeInput = h('input', { class: 'input', type: 'month', id: 'validade-mes-input' });
+    validadeInput.value = draft.validade || '';
+    validadeInput.addEventListener('change', () => { draft.validade = validadeInput.value; });
+
+    const quantidadeInput = h('input', { class: 'input', type: 'number', min: '0', placeholder: 'Ex: 12' });
+    quantidadeInput.value = draft.quantidade || '';
+    quantidadeInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
+    quantidadeInput.addEventListener('input', () => {
+      if (quantidadeInput.value !== '' && parseFloat(quantidadeInput.value) < 0) quantidadeInput.value = quantidadeInput.value.replace('-', '');
+      draft.quantidade = quantidadeInput.value;
+    });
+
+    const localInput = h('input', { class: 'input', placeholder: 'Ex: Prateleira 3, Armário B...' });
+    localInput.value = draft.localizacao || '';
+    localInput.addEventListener('input', () => { draft.localizacao = localInput.value; });
+
+    const campos = [
+      buildCnpAutoFillField(),
+      h('div', { class: 'field span2' }, [h('label', {}, 'Nome do Produto / Descrição'), produtoInput]),
+      h('div', { class: 'field field-xs' }, [h('label', {}, 'Data de Validade'), validadeInput, h('p', { class: 'field-helper-text' }, 'Só são aceites validades a menos de 1 ano.')]),
+      h('div', { class: 'field field-xs' }, [h('label', {}, 'Quantidade Disponível (opcional)'), quantidadeInput]),
+      h('div', { class: 'field span2' }, [h('label', {}, 'Localização (opcional)'), localInput]),
+    ];
+    const saveBtn = h('button', { class: 'btn btn-primary', onclick: saving ? null : submit, disabled: saving ? 'disabled' : undefined }, saving ? 'A guardar…' : 'Guardar');
+    const cancelBtn = h('button', { class: 'btn btn-secondary', onclick: cancel }, 'Cancelar');
+    const children = [h('div', { class: 'form-grid' }, campos)];
+    if (formError) children.push(h('p', { class: 'form-error' }, formError));
+    children.push(h('div', { class: 'form-actions' }, [saveBtn, cancelBtn]));
+    return h('div', { class: 'card card-pad' }, children);
+  }
+
+  function build() {
+    const wrap = h('div', { class: 'animate-in' });
+    const addBtn = h('button', { class: 'btn btn-primary', onclick: () => requireAuth(openNew) }, [Icon('plus', { size: 14, strokeWidth: 2.4 }), ' Novo Registo']);
+    wrap.appendChild(withBackButton(buildPageHeader('clock', 'Validades', 'Produtos a escoar prioritariamente — validade inferior a 1 ano.', addBtn), goTo));
+
+    if (showForm) { wrap.appendChild(buildForm()); return wrap; }
+
+    const searchInput = h('input', { class: 'search-input', type: 'text', placeholder: 'Pesquisar por produto, CNP ou localização...' });
+    searchInput.value = searchQuery;
+    searchInput.addEventListener('input', () => { searchQuery = searchInput.value; rerender(); });
+    wrap.appendChild(searchInput);
+
+    const lista = visibleValidades();
+    if (!lista.length) {
+      wrap.appendChild(h('p', { class: 'cell-muted', style: 'margin-top:16px;' }, 'Ainda não há produtos registados em Validades.'));
+      return wrap;
+    }
+    const linhas = lista.map(r => {
+      const limite30 = new Date(); limite30.setDate(limite30.getDate() + 30);
+      const perto = validadeUltimoDia(r.validade) && validadeUltimoDia(r.validade) <= limite30;
+      const delBtn = h('button', { class: 'btn-fab-sm tone-red', title: 'Eliminar', 'aria-label': 'Eliminar' }, Icon('trash', { size: 12, strokeWidth: 2.2 }));
+      delBtn.addEventListener('click', () => requireAuth(() => eliminar(r)));
+
+      // Quantidade Disponível — editável diretamente na lista, sem abrir o
+      // formulário, para acompanhar as vendas ao balcão em tempo real.
+      const qtdInput = h('input', { class: 'input validade-qtd-input', type: 'number', min: '0', placeholder: '—', title: 'Quantidade Disponível' });
+      qtdInput.value = (r.quantidade === null || r.quantidade === undefined) ? '' : String(r.quantidade);
+      qtdInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); if (e.key === 'Enter') qtdInput.blur(); });
+      qtdInput.addEventListener('change', () => {
+        requireAuth(() => {
+          const novo = qtdInput.value === '' ? null : Math.max(0, parseInt(qtdInput.value, 10) || 0);
+          qtdInput.value = novo === null ? '' : String(novo);
+          atualizarQuantidade(r, novo);
+        });
+      });
+
+      return h('div', { class: 'card card-pad validade-item-row' + (perto ? ' validade-item-urgente' : '') }, [
+        h('div', { style: 'flex:1;min-width:0;' }, [
+          h('p', { class: 'cell-strong', style: 'margin:0 0 3px;' }, r.produto || r.cnp || 'Sem nome'),
+          h('p', { class: 'cell-muted', style: 'margin:0;font-size:12px;' }, [
+            r.cnp ? `CNP ${r.cnp} · ` : '', `Validade: ${validadeFormatarMesAno(r.validade)}`,
+            r.localizacao ? ` · ${r.localizacao}` : '',
+          ]),
+        ]),
+        h('div', { class: 'field field-xs validade-qtd-field', style: 'margin:0;' }, [h('label', {}, 'Qtd.'), qtdInput]),
+        delBtn,
+      ]);
+    });
+    wrap.appendChild(h('div', { style: 'display:flex;flex-direction:column;gap:8px;margin-top:14px;' }, linhas));
     return wrap;
   }
 
@@ -9031,9 +9384,15 @@ function buildMapaTarefasPage(container, goTo) {
   let showForm = false, editingId = null, draft = emptyRecord(mapaTarefasSchema);
   let formError = '';
   let saving = false;
+  let selectedIds = new Set();
 
   function podeEditar() { return isMasterUser(); }
   function rerender() { clear(container); container.appendChild(build()); }
+  function toggleSelect(id) {
+    if (!podeEditar()) return;
+    if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
+    rerender();
+  }
 
   function openNew(categoriaPreSelecionada) {
     if (!podeEditar()) return;
@@ -9044,6 +9403,12 @@ function buildMapaTarefasPage(container, goTo) {
   function openEdit(r) {
     if (!podeEditar()) return;
     draft = Object.assign({}, r); editingId = r.id; formError = ''; showForm = true; rerender();
+  }
+  function openEditSelected() {
+    if (selectedIds.size !== 1) return;
+    const id = [...selectedIds][0];
+    const r = STATE.mapaTarefas.find(x => x.id === id);
+    if (r) openEdit(r);
   }
   function cancel() { formError = ''; showForm = false; rerender(); }
 
@@ -9075,7 +9440,7 @@ function buildMapaTarefasPage(container, goTo) {
       else formError = `Não foi possível adicionar a tarefa. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
     }
     saving = false;
-    if (!formError) showForm = false;
+    if (!formError) { showForm = false; selectedIds = new Set(); }
     rerender();
   }
 
@@ -9083,8 +9448,21 @@ function buildMapaTarefasPage(container, goTo) {
     if (!podeEditar()) return;
     confirmDialog(`Tem a certeza de que quer eliminar "${r.titulo}"?`, async () => {
       const ok = await dbDelete('mapaTarefas', r.id);
-      if (ok) { STATE.mapaTarefas = STATE.mapaTarefas.filter(x => x.id !== r.id); showForm = false; rerender(); }
+      if (ok) { STATE.mapaTarefas = STATE.mapaTarefas.filter(x => x.id !== r.id); showForm = false; selectedIds = new Set(); rerender(); }
       else showDbErrorToast('Não foi possível eliminar a tarefa');
+    }, { danger: true, confirmLabel: 'Eliminar' });
+  }
+  function removeSelecionadas() {
+    if (!podeEditar() || selectedIds.size === 0) return;
+    const ids = [...selectedIds];
+    const plural = ids.length > 1;
+    confirmDialog(`Tem a certeza de que quer eliminar ${ids.length} tarefa${plural ? 's' : ''} selecionada${plural ? 's' : ''}?`, async () => {
+      const resultados = await Promise.all(ids.map(id => dbDelete('mapaTarefas', id)));
+      const apagados = new Set(ids.filter((id, i) => resultados[i]));
+      STATE.mapaTarefas = STATE.mapaTarefas.filter(r => !apagados.has(r.id));
+      selectedIds = new Set([...selectedIds].filter(id => !apagados.has(id)));
+      showForm = false; rerender();
+      if (apagados.size < ids.length) showDbErrorToast('Algumas tarefas não puderam ser eliminadas');
     }, { danger: true, confirmLabel: 'Eliminar' });
   }
 
@@ -9114,19 +9492,27 @@ function buildMapaTarefasPage(container, goTo) {
       return h('div', {}, [header, h('p', { class: 'cell-muted', style: 'margin:0 0 8px;' }, 'Sem tarefas nesta categoria.')]);
     }
 
-    const thead = h('thead', {}, h('tr', {}, ['Título', 'Responsável', 'Substituto', 'Observações', ''].map(t => h('th', {}, t))));
+    const cabecalho = podeEditar()
+      ? ['', 'Título', 'Responsável', 'Substituto', 'Observações']
+      : ['Título', 'Responsável', 'Substituto', 'Observações'];
+    const thead = h('thead', {}, h('tr', {}, cabecalho.map(t => h('th', {}, t))));
     const tbody = h('tbody', {}, itens.map(r => {
-      const editBtn = podeEditar() ? editIconButton(() => openEdit(r)) : null;
-      const delBtn = podeEditar() ? h('button', { class: 'btn-fab-sm tone-red', title: 'Eliminar', 'aria-label': 'Eliminar' }, Icon('trash', { size: 13, strokeWidth: 2.2 })) : null;
-      if (delBtn) delBtn.addEventListener('click', () => removeTarefa(r));
-      const acoes = podeEditar() ? h('div', { class: 'row-actions' }, [editBtn, delBtn]) : '';
-      return h('tr', {}, [
+      const selected = selectedIds.has(r.id);
+      const linhaCelulas = [
         h('td', { class: 'cell-strong' }, r.titulo || '—'),
         h('td', {}, r.responsavel || '—'),
         h('td', {}, (r.substituto && r.substituto !== '—') ? r.substituto : '—'),
         h('td', { class: 'cell-muted' }, r.observacoes || '—'),
-        h('td', { class: 'text-right' }, acoes),
-      ]);
+      ];
+      if (podeEditar()) {
+        const cb = h('input', { type: 'checkbox', checked: selected });
+        cb.addEventListener('click', (e) => e.stopPropagation());
+        cb.addEventListener('change', () => toggleSelect(r.id));
+        linhaCelulas.unshift(h('td', {}, cb));
+      }
+      const row = h('tr', { class: podeEditar() ? 'selectable-row' + (selected ? ' row-selected' : '') : undefined }, linhaCelulas);
+      if (podeEditar()) row.addEventListener('click', () => toggleSelect(r.id));
+      return row;
     }));
     return h('div', {}, [header, h('div', { class: 'card' }, h('div', { class: 'table-wrap' }, h('table', {}, [thead, tbody])))]);
   }
@@ -9163,10 +9549,16 @@ function buildMapaTarefasPage(container, goTo) {
 
     MAPA_TAREFAS_CATEGORIAS.forEach(cat => wrap.appendChild(buildCategoriaSection(cat)));
 
+    // Mesma Barra de Ações Inferior usada em Manipulados/Pedidos e restantes
+    // módulos — em vez do botão flutuante próprio que este ecrã tinha antes.
     if (podeEditar() && !showForm) {
-      const fab = h('button', { class: 'mapa-tarefas-fab', title: 'Adicionar tarefa', 'aria-label': 'Adicionar tarefa' }, Icon('plus', { size: 22, strokeWidth: 2.4 }));
-      fab.addEventListener('click', () => openNew());
-      wrap.appendChild(fab);
+      wrap.appendChild(buildBottomActionBar({
+        selectedCount: selectedIds.size,
+        addLabel: 'Nova Tarefa',
+        onAdd: () => openNew(),
+        onEdit: openEditSelected,
+        onDelete: removeSelecionadas,
+      }));
     }
 
     return wrap;
@@ -10469,7 +10861,7 @@ const SECTOR_HUBS = [
 // de volta a uma grelha única (ver buildSectorHubPage).
 const SECTOR_HUB_TIERS = {
   'Stocks': [
-    { label: 'Principal', keys: ['erros', 'recolhas'] },
+    { label: 'Principal', keys: ['erros', 'recolhas', 'validades'] },
     { label: 'Ferramentas', keys: ['calculadoras'] },
   ],
   'Gestão': [
@@ -10740,6 +11132,7 @@ function render() {
       case 'desafios': buildDesafiosPage(pageContainer, goTo); break;
       case 'objetivos': buildObjetivosPage(pageContainer, goTo); break;
       case 'historico-mensagens': buildHistoricoMensagensPage(pageContainer, goTo); break;
+      case 'validades': buildValidadesPage(pageContainer, goTo); break;
       case 'doc-despesas': buildDeclaracaoDespesasPage(pageContainer, goTo); break;
       case 'doc-presenca': buildDeclaracaoPresencaPage(pageContainer, goTo); break;
       case 'doc-avaliacao-fisica': buildDeclaracaoAvaliacaoFisicaPage(pageContainer, goTo); break;
@@ -11215,6 +11608,9 @@ async function startApp() {
   // Temporizadores de Hora Limite das Entregas — só existem badges quando a
   // vista de Pendentes está visível; o querySelectorAll é barato quando não há nenhum.
   setInterval(atualizarTodosEntregaTimerBadges, 20000);
+  // Ticker de Validades na Página Inicial — só existe o elemento quando há
+  // produtos registados; o querySelectorAll é barato quando não há nenhum.
+  setInterval(avancarTodosValidadesTickers, 4000);
 }
 
 function showLoginGate() {
