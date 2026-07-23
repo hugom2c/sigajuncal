@@ -2658,7 +2658,7 @@ function buildAgendaPage(container, goTo, prestadorKey) {
 
   function build() {
     const wrap = h('div', { class: 'animate-in' });
-    wrap.appendChild(withBackButton(buildPageHeader(prestador.icon, prestador.nome, prestador.especialidade, undefined), goTo));
+    wrap.appendChild(withCustomBackButton(buildPageHeader(prestador.icon, prestador.nome, prestador.especialidade, undefined), () => goTo('hub-agendas')));
     wrap.appendChild(buildCalendarioCarrossel(onDayClick, prestadorKey));
     // Bloco de notas rápido — disponível para qualquer utilizador com acesso
     // a esta Agenda (quem já chega a esta página tem permissão de marcação),
@@ -10547,7 +10547,7 @@ function buildNutricaoSubPage(container, goTo) {
   clear(container);
   const servico = SERVICOS_AGENDA.find(s => s.key === 'nutricao');
   const wrap = h('div', { class: 'animate-in' });
-  wrap.appendChild(withBackButton(buildPageHeader('utensils', 'Nutrição', 'Escolha a profissional.', undefined), goTo));
+  wrap.appendChild(withCustomBackButton(buildPageHeader('utensils', 'Nutrição', 'Escolha a profissional.', undefined), () => goTo('hub-agendas')));
   const grid = h('div', { class: 'quick-grid' }, servico.prestadores.map(prestadorKey => {
     const prestador = PRESTADORES_AGENDA.find(p => p.key === prestadorKey);
     return h('button', { class: 'hub-card', onclick: () => goTo(`agenda-${prestador.key}`) }, [
