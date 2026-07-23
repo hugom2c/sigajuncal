@@ -8083,9 +8083,12 @@ function buildDefinicoesPage(container, goTo) {
 
   function checkUsuarioRequired(d, editingSelf, isNew) {
     const missing = [];
-    if (!String(d.primeiroNome || '').trim()) missing.push('Primeiro Nome');
-    if (!String(d.apelido || '').trim()) missing.push('Apelido');
-    const semCategoriaObrigatoria = d.perfilNivel === 'Estafeta' || d.perfilNivel === 'Prestador de Serviço';
+    const ehBoaNova = d.perfilNivel === 'Farmácia Boa Nova';
+    if (!ehBoaNova) {
+      if (!String(d.primeiroNome || '').trim()) missing.push('Primeiro Nome');
+      if (!String(d.apelido || '').trim()) missing.push('Apelido');
+    }
+    const semCategoriaObrigatoria = d.perfilNivel === 'Estafeta' || d.perfilNivel === 'Prestador de Serviço' || ehBoaNova;
     if (!semCategoriaObrigatoria && !String(d.categoriaProfissional || '').trim()) missing.push('Categoria Profissional');
     if (isNew || editingSelf) {
       if (!String(d.username || '').trim()) missing.push('Username');
@@ -8127,12 +8130,16 @@ function buildDefinicoesPage(container, goTo) {
     }
     formError = '';
     saving = true; rerender();
-    const nomeCompleto = nomeCompletoDoDraft(draft);
+    const ehBoaNova = draft.perfilNivel === 'Farmácia Boa Nova';
+    // Rede de segurança: garante sempre estes valores para o perfil Farmácia
+    // Boa Nova, independentemente do que o formulário tinha em memória.
+    const nomeCompleto = ehBoaNova ? 'Farmácia Boa Nova' : nomeCompletoDoDraft(draft);
+    const categoriaProfissional = ehBoaNova ? 'Não aplicável' : draft.categoriaProfissional;
     const prestadorKey = draft.perfilNivel === 'Prestador de Serviço' ? (draft.prestadorKey || '') : '';
     if (editingId) {
       const payload = editingSelf
-        ? { nomeCompleto, categoriaProfissional: draft.categoriaProfissional, perfilNivel: draft.perfilNivel, prestadorKey, username: draft.username, pin: draft.pin }
-        : { nomeCompleto, categoriaProfissional: draft.categoriaProfissional, perfilNivel: draft.perfilNivel, prestadorKey };
+        ? { nomeCompleto, categoriaProfissional, perfilNivel: draft.perfilNivel, prestadorKey, username: draft.username, pin: draft.pin }
+        : { nomeCompleto, categoriaProfissional, perfilNivel: draft.perfilNivel, prestadorKey };
       const updated = await dbUpdate('usuarios', editingId, payload);
       if (updated) {
         STATE.usuarios = STATE.usuarios.map(u => u.id === editingId ? updated : u);
@@ -8142,7 +8149,7 @@ function buildDefinicoesPage(container, goTo) {
         }
       } else formError = `Não foi possível guardar as alterações. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
     } else {
-      const payload = { nomeCompleto, categoriaProfissional: draft.categoriaProfissional, perfilNivel: draft.perfilNivel, prestadorKey, username: draft.username, pin: draft.pin };
+      const payload = { nomeCompleto, categoriaProfissional, perfilNivel: draft.perfilNivel, prestadorKey, username: draft.username, pin: draft.pin };
       const created = await dbInsertUsuarioComLimpeza(payload);
       if (created) STATE.usuarios = [created, ...STATE.usuarios];
       else formError = `Não foi possível criar o utilizador. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
@@ -8173,16 +8180,42 @@ function buildDefinicoesPage(container, goTo) {
   function usuarioFormSchema() {
     const editingSelf = editingId && isSelf(editingId);
     const ehPrestador = draft.perfilNivel === 'Prestador de Serviço';
-    const semCategoria = draft.perfilNivel === 'Estafeta' || ehPrestador;
+    // Perfil "Farmácia Boa Nova": conta partilhada/genérica de operação, sem
+    // pessoa associada — Nome/Apelido/Categoria ficam preenchidos
+    // automaticamente e bloqueados; só Username, PIN e o próprio Nível de
+    // Perfil continuam editáveis.
+    const ehBoaNova = draft.perfilNivel === 'Farmácia Boa Nova';
+    const semCategoria = draft.perfilNivel === 'Estafeta' || ehPrestador || ehBoaNova;
     const base = [
-      { name: 'primeiroNome', label: 'Primeiro Nome', type: 'text', singleWord: true, placeholder: 'Ex: Hugo' },
-      { name: 'apelido', label: 'Apelido', type: 'text', singleWord: true, placeholder: 'Ex: Cunha' },
+      {
+        name: 'primeiroNome', label: 'Primeiro Nome' + (ehBoaNova ? ' (preenchido automaticamente)' : ''),
+        type: 'text', singleWord: true, placeholder: 'Ex: Hugo', disabled: ehBoaNova,
+      },
+      {
+        name: 'apelido', label: 'Apelido' + (ehBoaNova ? ' (preenchido automaticamente)' : ''),
+        type: 'text', singleWord: true, placeholder: 'Ex: Cunha', disabled: ehBoaNova,
+      },
       {
         name: 'categoriaProfissional', label: 'Categoria Profissional' + (semCategoria ? ' (não aplicável)' : ''),
         type: 'combo', options: CATEGORIAS_PROFISSIONAIS, placeholder: semCategoria ? 'Não aplicável a este perfil' : 'Escrever ou escolher...',
         disabled: semCategoria,
       },
-      { name: 'perfilNivel', label: 'Nível de Perfil', type: 'select', options: PERFIS_NIVEL, size: 'sm', onChange: () => { if (draft.perfilNivel === 'Estafeta' || draft.perfilNivel === 'Prestador de Serviço') draft.categoriaProfissional = ''; rerender(); } },
+      {
+        name: 'perfilNivel', label: 'Nível de Perfil', type: 'select', options: PERFIS_NIVEL, size: 'sm', onChange: () => {
+          if (draft.perfilNivel === 'Estafeta' || draft.perfilNivel === 'Prestador de Serviço') draft.categoriaProfissional = '';
+          if (draft.perfilNivel === 'Farmácia Boa Nova') {
+            draft.primeiroNome = 'Farmácia';
+            draft.apelido = 'Boa Nova';
+            draft.categoriaProfissional = '';
+          } else if (draft.primeiroNome === 'Farmácia' && draft.apelido === 'Boa Nova') {
+            // Estava preenchido automaticamente pelo perfil anterior — limpa
+            // para a pessoa poder escrever o nome real do novo perfil.
+            draft.primeiroNome = '';
+            draft.apelido = '';
+          }
+          rerender();
+        },
+      },
     ];
     if (ehPrestador) {
       base.push({
@@ -10644,7 +10677,7 @@ function buildUserBadgeElement() {
   if (activeUser) {
     const cargo = String(activeUser.categoriaProfissional || '').trim();
     const kids = [h('p', { class: 'active-user-name' }, activeUser.nomeCompleto || activeUser.username)];
-    if (cargo && cargo !== '-' && cargo !== '—') kids.push(h('p', { class: 'active-user-role' }, cargo));
+    if (cargo && cargo !== '-' && cargo !== '—' && cargo !== 'Não aplicável') kids.push(h('p', { class: 'active-user-role' }, cargo));
     kids.push(h('p', { class: 'active-user-perfil' }, activeUser.perfilNivel || 'Básico'));
     return h('button', { class: 'active-user-badge', onclick: manualLogout, title: 'Terminar sessão', 'aria-label': 'Terminar sessão' }, [
       h('span', { class: 'active-user-icon unlocked' }, Icon('lockOpen', { size: 26, strokeWidth: 2 })),
