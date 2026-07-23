@@ -1647,9 +1647,9 @@ function buildOrcamentosPanel(listKey, draft, rerender, bloqueado) {
 
 const errosSchema = [
   { name: 'data', label: 'Data', type: 'date', size: 'xs' },
-  { name: 'produto', label: 'Produto', type: 'text', col: 2 },
   { name: 'cnp', label: 'CNP / Código', type: 'text', size: 'xs' },
-  { name: 'qtdFisica', label: 'Qtd. Física', type: 'number', integer: true, allowNegative: true, size: 'xs' },
+  { name: 'produto', label: 'Produto', type: 'text', col: 2 },
+  { name: 'qtdFisica', label: 'Qtd. Física', type: 'number', integer: true, allowNegative: true, size: 'xs', id: 'erro-qtd-fisica-input' },
   { name: 'qtdSistema', label: 'Qtd. Sistema', type: 'number', integer: true, allowNegative: true, size: 'xs' },
   { name: 'obs', label: 'Observações', type: 'textarea', col: 2 },
 ];
@@ -1753,14 +1753,13 @@ const MAPA48H_INTERVALO_DIAS = 3;
 const mapa48hSchema = [
   { name: 'nomeCliente', label: 'Nome do Cliente', type: 'text', col: 2 },
   { name: 'nFicha', label: 'Nº Ficha', type: 'text', size: 'xs' },
-  { name: 'nMapa', label: 'Nº Mapa', type: 'text', size: 'xs' },
+  { name: 'nMapa', label: 'Nº Mapa (opcional — pode preencher mais tarde)', type: 'text', size: 'xs' },
   { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
   { name: 'dataInicio', label: 'Data de Início', type: 'date', size: 'xs' },
   { name: 'dataFim', label: 'Data de Fim', type: 'date', size: 'xs' },
   { name: 'faturacao', label: 'Faturação', type: 'select', options: ['Sim', 'Não'], size: 'xs' },
   { name: 'avisado', label: 'Avisado', type: 'select', options: ['Sim', 'Não'], size: 'xs' },
   { name: 'estadoEntrega', label: 'Estado', type: 'select', options: ['Já entregou', 'Pendente'], size: 'sm' },
-  { name: 'repeticao', label: 'Repetição', type: 'select', options: ['Não Repete', 'Repetir'], size: 'sm' },
   { name: 'dataLeitura', label: 'Data de Leitura', type: 'date', size: 'xs' },
   { name: 'observacoes', label: 'Observações', type: 'textarea', col: 2 },
 ];
@@ -2728,6 +2727,15 @@ function mapa48hProximaDataDisponivel(excludeId) {
   const candidata = dateToISO(d);
   return candidata > hoje ? candidata : hoje;
 }
+// Data de Fim = Data de Início + 2 dias (48H) — mesma janela do exame MAPA,
+// recalculada sempre que a Data de Início muda (definida de origem ou
+// editada à mão no formulário).
+function mapa48hCalcularDataFim(dataInicioISO) {
+  if (!dataInicioISO) return '';
+  const d = new Date(dataInicioISO + 'T00:00:00');
+  d.setDate(d.getDate() + 2);
+  return dateToISO(d);
+}
 // Devolve a marcação em conflito (menos de 72h de intervalo) ou null se a data for válida.
 function mapa48hConflito(novaDataInicio, excludeId) {
   if (!novaDataInicio) return null;
@@ -3605,6 +3613,7 @@ function buildField(field, draft) {
       class: 'input', type: 'number', step: '1', inputmode: 'numeric',
       placeholder: field.placeholder || '0',
       min: field.allowNegative ? undefined : '0',
+      id: field.id || undefined,
     });
     control.value = draft[field.name] || '';
     control.addEventListener('keydown', (e) => {
@@ -3786,6 +3795,29 @@ function confirmarPagamentoEntregaDialog(onEscolhaPago) {
     h('p', { class: 'confirm-message' },
       "Esta entrega consta como 'A Cobrar'. O valor foi cobrado e o pagamento efetuado no ato da entrega?"),
     h('div', { class: 'form-actions', style: 'flex-direction:column;align-items:stretch;gap:10px;' }, [pagoBtn, manterBtn, cancelBtn]),
+  ]);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
+// Popup de 3 opções ao concluir um exame Mapa 48H — pergunta logo se o
+// utente vai repetir, para nunca perder o costume de já agendar a próxima
+// vez ali mesmo. onEscolha é chamado com true (Sim, Agendar Repetição),
+// false (Não, Apenas Concluir), ou nunca (Cancelar — não faz nada).
+function confirmarConclusaoMapa48hDialog(onEscolha) {
+  const overlay = h('div', { class: 'modal-overlay' });
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
+  const repetirBtn = h('button', { class: 'btn btn-primary', onclick: () => { close(); onEscolha(true); } },
+    'Sim, Agendar Repetição');
+  const apenasBtn = h('button', { class: 'btn btn-secondary', onclick: () => { close(); onEscolha(false); } },
+    'Não, Apenas Concluir');
+  const cancelBtn = h('button', { class: 'btn btn-secondary', style: 'color:var(--red);', onclick: close }, 'Cancelar');
+  const panel = h('div', { class: 'modal-panel confirm-panel' }, [
+    h('p', { class: 'modal-title', style: 'margin-bottom:10px;' }, 'Concluir Exame Mapa 48H'),
+    h('p', { class: 'confirm-message' }, 'O utente vai repetir o exame do Mapa 48H?'),
+    h('div', { class: 'form-actions', style: 'flex-direction:column;align-items:stretch;gap:10px;' }, [repetirBtn, apenasBtn, cancelBtn]),
   ]);
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
@@ -4847,19 +4879,57 @@ function buildErrosPage(container, goTo) {
   // tenha escrito à mão. Se não encontrar nada, o campo Produto continua
   // normalmente editável.
   function buildCnpAutoFillField(f) {
-    const control = h('input', { class: 'input', type: 'text', placeholder: f.placeholder || 'Ex: 1234567' });
+    const control = h('input', { class: 'input', type: 'text', placeholder: f.placeholder || 'Ex: 1234567 (ou passa o leitor de código de barras)' });
     control.value = draft.cnp || '';
-    control.addEventListener('input', () => { draft.cnp = control.value; });
-    control.addEventListener('change', async () => {
+    let debounceTimer = null;
+    let ultimoCnpConsultado = '';
+    // Consulta o dicionario_cnp e, se encontrar, preenche o Produto e salta
+    // logo para a Qtd. Física — pensado para o registo ser tão rápido
+    // quanto digitar/ler o CNP e escrever só a diferença de stock.
+    async function consultarEPreencher() {
       const cnpAtual = String(draft.cnp || '').trim();
-      if (!cnpAtual || String(draft.produto || '').trim()) return;
+      if (!cnpAtual || cnpAtual === ultimoCnpConsultado) return;
+      ultimoCnpConsultado = cnpAtual;
+      if (String(draft.produto || '').trim()) return; // já tem nome escrito à mão — nunca o substitui
       const nomeEncontrado = await dbBuscarProdutoPorCnp(cnpAtual);
       // Confirma que o CNP não mudou entretanto e que o Produto continua
       // vazio antes de preencher — protege contra respostas tardias.
-      if (nomeEncontrado && !String(draft.produto || '').trim() && String(draft.cnp || '').trim() === cnpAtual) {
+      if (String(draft.cnp || '').trim() !== cnpAtual || String(draft.produto || '').trim()) return;
+      if (nomeEncontrado) {
         draft.produto = nomeEncontrado;
         rerender();
+        // Poupa cliques: com o produto já identificado, o próximo passo
+        // natural é logo a quantidade física contada no balcão.
+        setTimeout(() => {
+          const campoQtd = document.getElementById('erro-qtd-fisica-input');
+          if (campoQtd) { campoQtd.focus(); campoQtd.select(); }
+        }, 0);
       }
+    }
+    control.addEventListener('input', () => {
+      draft.cnp = control.value;
+      ultimoCnpConsultado = ''; // CNP mudou — liberta para uma nova consulta
+      if (debounceTimer) clearTimeout(debounceTimer);
+      // Debounce curto: cobre tanto quem escreve à mão como um leitor de
+      // código de barras, que despeja os dígitos quase instantaneamente.
+      debounceTimer = setTimeout(consultarEPreencher, 350);
+    });
+    // Leitores de código de barras terminam tipicamente com um "Enter" —
+    // dispara a consulta de imediato, sem esperar pelo debounce.
+    control.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        consultarEPreencher();
+      }
+    });
+    control.addEventListener('change', () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      consultarEPreencher();
+    });
+    control.addEventListener('blur', () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      consultarEPreencher();
     });
     const kids = [h('label', {}, f.label), control];
     if (f.helperText) kids.push(h('p', { class: 'field-helper-text' }, f.helperText));
@@ -8444,8 +8514,18 @@ function buildMapa48hPage(container, goTo) {
   function rerender() { clear(container); container.appendChild(build()); }
   function toggleSelect(id) { if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id); rerender(); }
 
-  function openNew() {
-    draft = { nomeCliente: '', nFicha: '', nMapa: '', contacto: '', dataInicio: '', dataFim: '', faturacao: 'Não', avisado: 'Não', estadoEntrega: 'Pendente', repeticao: 'Não Repete', dataLeitura: '', observacoes: '' };
+  function openNew(prefill) {
+    prefill = prefill || {};
+    // Data de Início assume logo a Próxima Data Disponível calculada pela
+    // app, e a Data de Fim fica pré-calculada a +48H — poupa dois campos a
+    // preencher à mão em quase todos os registos novos.
+    const dataInicioSugerida = mapa48hProximaDataDisponivel(null);
+    draft = {
+      nomeCliente: '', nFicha: '', nMapa: '', contacto: '',
+      dataInicio: dataInicioSugerida, dataFim: mapa48hCalcularDataFim(dataInicioSugerida),
+      faturacao: 'Não', avisado: 'Não', estadoEntrega: 'Pendente', dataLeitura: '', observacoes: '',
+      ...prefill,
+    };
     editingId = null; formError = ''; showForm = true; rerender();
   }
   function openEditSelected() {
@@ -8518,15 +8598,21 @@ function buildMapa48hPage(container, goTo) {
   }
 
   function marcarEntregue(id) {
-    confirmDialog('Tem a certeza de que quer marcar este registo como já entregou?', async () => {
+    const registoAtual = STATE.mapa48h.find(r => r.id === id);
+    confirmarConclusaoMapa48hDialog(async (vaiRepetir) => {
       const updated = await dbUpdate('mapa48h', id, { estadoEntrega: 'Já entregou' });
-      if (updated) {
-        STATE.mapa48h = STATE.mapa48h.map(r => r.id === id ? updated : r);
-        selectedIds = new Set([...selectedIds].filter(x => x !== id));
-        showForm = false;
+      if (!updated) { showDbErrorToast('Não foi possível marcar como concluído'); return; }
+      STATE.mapa48h = STATE.mapa48h.map(r => r.id === id ? updated : r);
+      selectedIds = new Set([...selectedIds].filter(x => x !== id));
+      showForm = false;
+      if (vaiRepetir && registoAtual) {
+        // Abre logo o Novo Registo com os dados do utente já preenchidos —
+        // só falta confirmar/ajustar as datas, sugeridas automaticamente.
+        openNew({ nomeCliente: registoAtual.nomeCliente || '', nFicha: registoAtual.nFicha || '', contacto: registoAtual.contacto || '' });
+      } else {
         rerender();
-      } else showDbErrorToast('Não foi possível marcar como entregue');
-    }, { confirmLabel: 'Marcar como Entregue' });
+      }
+    });
   }
   function anularEntrega(id) {
     confirmDialog('Tem a certeza de que quer anular e devolver este registo aos pendentes?', async () => {
@@ -8546,7 +8632,7 @@ function buildMapa48hPage(container, goTo) {
       ? `ATENÇÃO: conflito com a marcação de ${formatDate(conflito.dataInicio)} (${conflito.nomeCliente || 'sem nome'}) — tem de haver pelo menos 72h de intervalo.`
       : `Próxima Data Disponível: ${formatDate(mapa48hProximaDataDisponivel(editingId))}`;
     return mapa48hSchema.map(f => f.name === 'dataInicio'
-      ? Object.assign({}, f, { onChange: () => rerender(), helperText: helper })
+      ? Object.assign({}, f, { onChange: () => { draft.dataFim = mapa48hCalcularDataFim(draft.dataInicio); rerender(); }, helperText: helper })
       : f);
   }
 
@@ -8554,7 +8640,12 @@ function buildMapa48hPage(container, goTo) {
     const q = searchQuery.trim().toLowerCase();
     let list = STATE.mapa48h.filter(r => activeTab === 'historico' ? r.estadoEntrega === 'Já entregou' : r.estadoEntrega !== 'Já entregou');
     if (q) list = list.filter(r => [r.nomeCliente, r.nFicha, r.nMapa, r.contacto].some(v => (v || '').toLowerCase().includes(q)));
-    return list.slice().sort((a, b) => (b.dataInicio || '').localeCompare(a.dataInicio || ''));
+    // Pendentes: fila de espera cronológica — a marcação mais antiga/ativa
+    // ("Aparelho a Uso") fica sempre no topo, as futuras ficam por baixo.
+    // Histórico: mantém-se por ordem decrescente (concluído mais recente primeiro).
+    return list.slice().sort((a, b) => activeTab === 'pendentes'
+      ? (a.dataInicio || '').localeCompare(b.dataInicio || '')
+      : (b.dataInicio || '').localeCompare(a.dataInicio || ''));
   }
 
   function buildTable(list) {
@@ -8562,7 +8653,7 @@ function buildMapa48hPage(container, goTo) {
       const msg = searchQuery ? 'Nenhum resultado para essa pesquisa.' : (activeTab === 'historico' ? 'Ainda não há entregas concluídas.' : 'Sem marcações ou pendentes de momento.');
       return EmptyState(msg);
     }
-    const thead = h('thead', {}, h('tr', {}, ['', 'Cliente', 'Nº Ficha', 'Data Início', 'Data Fim', 'Faturação', 'Avisado', 'Estado', 'Repetição'].map(t => h('th', {}, t))));
+    const thead = h('thead', {}, h('tr', {}, ['', 'Cliente', 'Nº Ficha', 'Data Início', 'Data Fim', 'Faturação', 'Avisado', 'Estado'].map(t => h('th', {}, t))));
     const rows = list.map(r => {
       const selected = selectedIds.has(r.id);
       const aUso = activeTab === 'pendentes' && mapa48hAUso(r);
@@ -8570,7 +8661,11 @@ function buildMapa48hPage(container, goTo) {
       const estadoCell = r.estadoEntrega === 'Já entregou'
         ? h('span', { class: 'badge badge-green' }, 'JÁ ENTREGOU')
         : h('div', {}, [
-          h('span', { class: 'badge badge-orange' }, 'PENDENTE'),
+          (() => {
+            const pendenteBadge = h('span', { class: 'badge badge-orange estado-badge-clicavel', title: 'Clicar para marcar como Concluído' }, 'PENDENTE');
+            pendenteBadge.addEventListener('click', (e) => { e.stopPropagation(); requireAuth(() => marcarEntregue(r.id)); });
+            return pendenteBadge;
+          })(),
           aUso ? h('span', { class: 'badge-em-uso' }, [Icon('zap', { size: 11, strokeWidth: 2.4 }), ' Aparelho a Uso']) : null,
         ]);
       const avisadoBtn = h('button', {
@@ -8587,7 +8682,6 @@ function buildMapa48hPage(container, goTo) {
         h('td', {}, r.faturacao || '—'),
         h('td', {}, avisadoBtn),
         h('td', {}, estadoCell),
-        h('td', {}, r.repeticao === 'Repetir' ? h('span', { class: 'badge badge-orange' }, 'REPETIR') : '—'),
       ]);
       return row;
     });
