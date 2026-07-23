@@ -1714,8 +1714,7 @@ const reclamacoesSchema = [
   { name: 'contacto', label: 'Contacto', type: 'text', size: 'sm', maxLength: 9, inputmode: 'numeric', pattern: '[0-9]{9}', digitsOnly: true, placeholder: '9 dígitos' },
   { name: 'data', label: 'Data', type: 'date', size: 'xs' },
   { name: 'produto', label: 'Produto', type: 'text', size: 'sm' },
-  { name: 'cnp', label: 'CNP / Código', type: 'text', size: 'xs' },
-  { name: 'motivo', label: 'Motivo', type: 'text', col: 2 },
+  { name: 'cnp', label: 'CNP / Código', type: 'text', size: 'xs', inputmode: 'numeric', pattern: '[0-9]*', digitsOnly: true },
   { name: 'fornecedorContactado', label: 'Fornecedor / Laboratório Contactado', type: 'combo', options: ['OCP', 'Empifarma', 'Alliance Healthcare', 'Plural'], placeholder: 'Escrever ou escolher...', size: 'sm' },
   { name: 'numeroGuia', label: 'Nº da Guia de Devolução (opcional)', type: 'text', size: 'sm' },
   { name: 'obs', label: 'Observações', type: 'textarea', col: 2 },
@@ -2754,7 +2753,7 @@ function buildAgendaPage(container, goTo, prestadorKey) {
 // Recolhas — devoluções de produtos (sub-separador de Stocks)
 const recolhasSchema = [
   { name: 'nomeProduto', label: 'Nome do Produto', type: 'text', col: 2 },
-  { name: 'codigoProduto', label: 'Código do Produto / CNP (opcional)', type: 'text', size: 'sm' },
+  { name: 'codigoProduto', label: 'Código do Produto / CNP (opcional)', type: 'text', size: 'sm', inputmode: 'numeric', pattern: '[0-9]*', digitsOnly: true },
   { name: 'dataCriacao', label: 'Data de Criação do Pedido', type: 'date', size: 'xs' },
   { name: 'dataConfirmacao', label: 'Data de Confirmação de Recolha', type: 'date', size: 'xs' },
 ];
@@ -5072,7 +5071,7 @@ function buildErrosPage(container, goTo) {
   // tenha escrito à mão. Se não encontrar nada, o campo Produto continua
   // normalmente editável.
   function buildCnpAutoFillField(f) {
-    const control = h('input', { class: 'input', type: 'text', id: 'erro-cnp-input', placeholder: f.placeholder || 'Ex: 1234567 (ou passa o leitor de código de barras)' });
+    const control = h('input', { class: 'input', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', id: 'erro-cnp-input', placeholder: f.placeholder || 'Ex: 1234567 (ou passa o leitor de código de barras)' });
     control.value = draft.cnp || '';
     let debounceTimer = null;
     let ultimoCnpConsultado = '';
@@ -5100,6 +5099,10 @@ function buildErrosPage(container, goTo) {
       }
     }
     control.addEventListener('input', () => {
+      // Só algarismos — nunca deixa passar letras ou caracteres especiais,
+      // seja escrito à mão, colado, ou vindo de um leitor de código de barras.
+      const cleaned = control.value.replace(/\D/g, '');
+      if (cleaned !== control.value) control.value = cleaned;
       draft.cnp = control.value;
       ultimoCnpConsultado = ''; // CNP mudou — liberta para uma nova consulta
       if (debounceTimer) clearTimeout(debounceTimer);
@@ -5404,7 +5407,7 @@ function buildValidadesPage(container, goTo) {
   }
 
   function buildCnpAutoFillField() {
-    const control = h('input', { class: 'input', type: 'text', id: 'validade-cnp-input', placeholder: 'Ex: 1234567 (ou passa o leitor de código de barras)' });
+    const control = h('input', { class: 'input', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', id: 'validade-cnp-input', placeholder: 'Ex: 1234567 (ou passa o leitor de código de barras)' });
     control.value = draft.cnp || '';
     let debounceTimer = null;
     let ultimoCnpConsultado = '';
@@ -5425,6 +5428,10 @@ function buildValidadesPage(container, goTo) {
       }
     }
     control.addEventListener('input', () => {
+      // Só algarismos — nunca deixa passar letras ou caracteres especiais,
+      // seja escrito à mão, colado, ou vindo de um leitor de código de barras.
+      const cleaned = control.value.replace(/\D/g, '');
+      if (cleaned !== control.value) control.value = cleaned;
       draft.cnp = control.value;
       ultimoCnpConsultado = '';
       if (debounceTimer) clearTimeout(debounceTimer);
@@ -11358,6 +11365,52 @@ function writeStoredAuth() {
   }
 }
 
+/* ---- Sessão persistente (só Estafeta e Farmácia Boa Nova) ----
+   Estes dois perfis trabalham num aparelho/posto fixo e dedicado (o
+   telemóvel do próprio estafeta, ou o tablet da farmácia parceira) — faz
+   sentido fazer login uma única vez e ficar sempre pronto a trabalhar,
+   sem pedir PIN/Password de novo a cada recarregamento da página. Guarda-se
+   só o essencial (id + username) para reidentificar o utilizador junto da
+   lista já carregada do Supabase — nunca o PIN. Todos os restantes perfis
+   continuam a nunca persistir sessão (ver `activeUser`, guardado só em
+   memória), por segurança num balcão partilhado por vários colegas.
+   Se a conta entretanto for eliminada, tiver o PIN alterado, ou deixar de
+   ser Estafeta/Farmácia Boa Nova, a sessão guardada deixa simplesmente de
+   corresponder a ninguém válido e a app pede login normalmente. */
+const SESSAO_PERSISTENTE_KEY = 'sigajuncal_sessao_persistente';
+function guardarSessaoPersistente(user) {
+  if (!user || (user.perfilNivel !== 'Estafeta' && user.perfilNivel !== 'Farmácia Boa Nova')) return;
+  try {
+    window.localStorage.setItem(SESSAO_PERSISTENTE_KEY, JSON.stringify({ id: user.id, username: user.username }));
+  } catch (e) { /* localStorage indisponível — sessão só fica válida até recarregar */ }
+}
+function limparSessaoPersistente() {
+  try { window.localStorage.removeItem(SESSAO_PERSISTENTE_KEY); } catch (e) { /* ignora */ }
+}
+// Tenta restaurar a sessão persistente logo no arranque da app, depois dos
+// utilizadores já terem sido carregados do Supabase. Devolve true se
+// conseguiu — nesse caso a app arranca já com sessão iniciada, sem mostrar
+// o ecrã de login.
+function restaurarSessaoPersistente() {
+  let guardada = null;
+  try {
+    const bruto = window.localStorage.getItem(SESSAO_PERSISTENTE_KEY);
+    if (bruto) guardada = JSON.parse(bruto);
+  } catch (e) { return false; }
+  if (!guardada || !guardada.id || !guardada.username) return false;
+  const u = (STATE.usuarios || []).find(x => String(x.id) === String(guardada.id) && x.username === guardada.username);
+  // Só restaura se a conta ainda existir E continuar com um destes dois
+  // perfis — protege contra a sessão persistente sobreviver a uma mudança
+  // de perfil ou a uma conta entretanto eliminada.
+  if (!u || (u.perfilNivel !== 'Estafeta' && u.perfilNivel !== 'Farmácia Boa Nova')) {
+    limparSessaoPersistente();
+    return false;
+  }
+  activeUser = { id: u.id, username: u.username, nomeCompleto: u.nomeCompleto || u.username, categoriaProfissional: u.categoriaProfissional || '', perfilNivel: u.perfilNivel || 'Basico', prestadorKey: u.prestadorKey || '' };
+  iniciarPresenca();
+  return true;
+}
+
 function buildLoadingScreen() {
   return h('div', { class: 'boot-loading', id: 'boot-loading' }, [
     h('img', { src: SIGA_LOGO_DATA_URI, alt: 'SigaJuncal', class: 'boot-loading-logo' }),
@@ -11579,6 +11632,7 @@ function showUserLoginScreen(onSuccess) {
     const u = findUsuario(credenciais.usernameReal, credenciais.pinReal);
     if (u) {
       activeUser = { id: u.id, username: u.username, nomeCompleto: u.nomeCompleto || u.username, categoriaProfissional: u.categoriaProfissional || '', perfilNivel: u.perfilNivel || 'Basico', prestadorKey: u.prestadorKey || '' };
+      guardarSessaoPersistente(activeUser);
       pedirPermissaoNotificacoes();
       iniciarPresenca();
       close();
@@ -11689,20 +11743,28 @@ function buildSidebarBadgeSlotContent() {
    sessão do utilizador é simplesmente limpa da memória — a app continua
    exatamente como estava no ecrã, só o badge da sidebar muda para "Iniciar
    Turno".
-   Limite alargado para 1 hora (Estafeta e Prestador de Serviço): estes
-   perfis trabalham tipicamente "fora do balcão" (na rua a fazer entregas,
-   ou numa sala de atendimento), com longos períodos sem tocar no
-   ecrã/telemóvel entre uma ação e a seguinte — 30s seria demasiado
-   agressivo e obrigaria a autenticações constantes. Todos os restantes
-   perfis mantêm o limite padrão, mais curto, por estarem sempre junto ao
-   posto de trabalho. */
+   - Estafeta e Farmácia Boa Nova: SEM bloqueio de inatividade — nenhum
+     temporizador chega sequer a ser criado para estes dois perfis. Fazem
+     login uma única vez no respetivo aparelho/posto fixo (ver sessão
+     persistente em localStorage, mais abaixo) e ficam sempre prontos a
+     trabalhar, sem interrupções nem PIN repetido.
+   - Prestador de Serviço: mantém o limite alargado de 1 hora — trabalha
+     tipicamente "fora do balcão" (numa sala de atendimento), com longos
+     períodos sem tocar no ecrã entre uma consulta e a seguinte, mas ainda
+     assim lida com dados de utentes, por isso continua a pedir PIN/Password
+     de volta ao fim desse tempo.
+   - Todos os restantes perfis (Básico, Administrador, etc.): mantêm o
+     limite padrão, mais curto, por estarem sempre junto ao posto de
+     trabalho no balcão. */
 const INACTIVITY_LIMIT_MS = 30000;
-const INACTIVITY_LIMIT_ESTAFETA_PRESTADOR_MS = 60 * 60 * 1000; // 1 hora (3600s)
+const INACTIVITY_LIMIT_PRESTADOR_MS = 60 * 60 * 1000; // 1 hora (3600s) — só Prestador de Serviço
 let inactivityTimer = null;
 function resetInactivityTimer() {
   if (inactivityTimer) clearTimeout(inactivityTimer);
   if (modoTesteAtivo) return; // bloqueio automático suspenso pelo Modo de Teste do Administrador
-  const limite = (isEstafeta() || isPrestadorServico()) ? INACTIVITY_LIMIT_ESTAFETA_PRESTADOR_MS : INACTIVITY_LIMIT_MS;
+  // Estafeta e Farmácia Boa Nova: nunca expira por inatividade.
+  if (isEstafeta() || isBoaNovaOperador()) return;
+  const limite = isPrestadorServico() ? INACTIVITY_LIMIT_PRESTADOR_MS : INACTIVITY_LIMIT_MS;
   inactivityTimer = setTimeout(clearSessionSilently, limite);
 }
 function clearSessionSilently() {
@@ -11719,6 +11781,7 @@ function clearSessionSilently() {
 function manualLogout() {
   confirmDialog('Deseja terminar a sessão atual?', () => {
     activeUser = null;
+    limparSessaoPersistente();
     pararPresenca();
     render();
     resetInactivityTimer();
@@ -11737,6 +11800,9 @@ async function startApp() {
   await loadAllData();
   await autoCancelOldOrders();
   loadingEl.remove();
+  // Sessão persistente (só Estafeta / Farmácia Boa Nova) — se houver uma
+  // guardada e ainda válida, a app arranca já autenticada, sem pedir PIN.
+  restaurarSessaoPersistente();
   // Sem sessão ativa (Camada 2), render() mostra de imediato o ecrã de
   // bloqueio "Iniciar Sessão" — já não existe Modo de Consulta Livre.
   render();
