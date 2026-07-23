@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>SigaJuncal · Gestão de Farmácia</title>
+<title>SigaJuncal · Gestão de Pedidos</title>
 
 <!-- PWA / Samsung Internet & Mobile WebAPKs — permite adicionar a app ao ecrã
      principal (Android/iOS) ou ambiente de trabalho (PC) em modo standalone
@@ -619,11 +619,16 @@
   .badge-purple{background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe;}
   .premios-mural-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;}
   .premio-mural-card{display:flex;flex-direction:column;}
-  .mapa-tarefas-fab{position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;
-    background:var(--pharm-600);color:#fff;border:none;display:flex;align-items:center;justify-content:center;
-    box-shadow:0 8px 20px rgba(0,0,0,.22);cursor:pointer;z-index:60;transition:background .15s ease,transform .15s ease;}
-  .mapa-tarefas-fab:hover{background:var(--pharm-700);transform:scale(1.05);}
-  @media (max-width:1023px){.mapa-tarefas-fab{bottom:calc(24px + env(safe-area-inset-bottom));}}
+  .mapa-tarefas-fab{position:fixed;bottom:88px;right:24px;width:48px;height:48px;border-radius:50%;
+    background:var(--blue);color:#fff;border:none;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 3px 10px rgba(37,99,235,.4);cursor:pointer;z-index:60;
+    transition:background-color .15s ease,transform .15s ease,box-shadow .15s ease;}
+  .mapa-tarefas-fab:hover{background:#1d4ed8;transform:scale(1.05);box-shadow:0 5px 14px rgba(37,99,235,.5);}
+  .mapa-tarefas-fab:active{transform:scale(0.96);}
+  /* Sobe acima da assinatura fixa no rodapé (.app-signature, bottom:14px) para
+     nunca lhe tapar o texto — sobretudo em ecrãs pequenos, onde a barra seria
+     mais apertada. */
+  @media (max-width:1023px){.mapa-tarefas-fab{bottom:calc(80px + env(safe-area-inset-bottom));}}
   .badge-orange{background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-bd);}
   .badge-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
   .badge-red{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd);}
@@ -2906,6 +2911,38 @@ async function bulkHardDelete(listKey, ids) {
     showDbErrorToast(falhas === 1 ? 'Não foi possível eliminar 1 dos registos selecionados' : `Não foi possível eliminar ${falhas} dos registos selecionados`);
   }
   return apagados;
+}
+// Autocorreção de registos "fantasma": eliminar um utilizador já faz sempre
+// HARD DELETE definitivo (ver bulkHardDelete acima), por isso o Username
+// fica logo livre para reutilização a partir de agora. Mas registos
+// eliminados ANTES desta correção existir (época em que a eliminação ainda
+// era soft delete) podem continuar na tabela usuarios_app com "eliminado =
+// true", presos a um Username que o Supabase continua a considerar
+// ocupado (erro "duplicate key value violates unique constraint
+// usuarios_app_username_key"). Esta função deteta especificamente esse
+// erro ao criar um utilizador novo, localiza o registo fantasma com o
+// mesmo Username, confirma que está mesmo marcado como eliminado, apaga-o
+// em definitivo, e tenta a criação uma única vez outra vez — de forma
+// totalmente transparente para quem está a usar a app.
+async function dbInsertUsuarioComLimpeza(payload) {
+  const created = await dbInsert('usuarios', payload);
+  if (created) return created;
+  const eraUsernameDuplicado = /duplicate key|unique constraint|usuarios_app_username_key/i.test(lastDbError || '');
+  if (!eraUsernameDuplicado || !sb || !payload.username) return null;
+  try {
+    const { data, error } = await sb.from('usuarios_app').select('id, eliminado').eq('username', payload.username).limit(1);
+    if (error || !data || !data.length) return null;
+    const fantasma = sanitizarSupabase(data)[0];
+    // Segurança extra: só apaga automaticamente se o registo encontrado já
+    // estava mesmo marcado como eliminado — nunca apaga um utilizador ativo.
+    if (!fantasma || !fantasma.eliminado) return null;
+    const apagouFantasma = await dbPermanentDelete('usuarios', fantasma.id);
+    if (!apagouFantasma) return null;
+    return await dbInsert('usuarios', payload);
+  } catch (e) {
+    console.error('[Supabase] erro ao limpar registo fantasma de utilizador:', formatarErroSeguro(e));
+    return null;
+  }
 }
 
 /* ---- Chat Interno (mensagens_chat) — tabela própria, sem soft delete:
@@ -8106,7 +8143,7 @@ function buildDefinicoesPage(container, goTo) {
       } else formError = `Não foi possível guardar as alterações. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
     } else {
       const payload = { nomeCompleto, categoriaProfissional: draft.categoriaProfissional, perfilNivel: draft.perfilNivel, prestadorKey, username: draft.username, pin: draft.pin };
-      const created = await dbInsert('usuarios', payload);
+      const created = await dbInsertUsuarioComLimpeza(payload);
       if (created) STATE.usuarios = [created, ...STATE.usuarios];
       else formError = `Não foi possível criar o utilizador. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
     }
