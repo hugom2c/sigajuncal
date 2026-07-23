@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>SigaJuncal · Gestão de Pedidos</title>
+<title>SigaJuncal · Gestão de Farmácia</title>
 
 <!-- PWA / Samsung Internet & Mobile WebAPKs — permite adicionar a app ao ecrã
      principal (Android/iOS) ou ambiente de trabalho (PC) em modo standalone
@@ -234,9 +234,18 @@
   .doc-table th,.doc-table td{border:1px solid #64748b;padding:7px 10px;text-align:left;color:#0f172a;}
   .doc-table th{background:#f1f5f9;font-weight:700;}
   .doc-table-total td{font-weight:800;background:#f1f5f9;}
-  /* Estado de Pagamento em destaque no Formulário de Entrega impresso */
-  .doc-table-destaque-pagamento td{font-weight:800;font-size:15px;background:#fef9c3;
-    border:2px solid #ca8a04;padding:10px 10px;color:#78350f;}
+  /* Estado de Pagamento em destaque no Formulário de Entrega impresso —
+     caixa autónoma (não é uma linha de tabela) desenhada para nunca depender
+     de cor de fundo: impressoras a laser/toner a preto e branco muitas vezes
+     ignoram o "print background" do browser, o que apaga qualquer destaque
+     baseado só em cor. Aqui o contraste vem inteiramente de borda preta
+     grossa, texto em maiúsculas e peso 800, e do símbolo [ ✓ ]/[ ⚠ ]. */
+  .doc-pagamento-box{display:flex;align-items:center;gap:12px;border:2px solid #000;
+    padding:12px 16px;margin:0 0 26px;font-weight:800;font-size:14pt;line-height:1.3;
+    text-transform:uppercase;letter-spacing:.02em;color:#000;background:#fff;}
+  .doc-pagamento-symbol{font-size:16pt;line-height:1;flex-shrink:0;}
+  .doc-pagamento-box.doc-pagamento-ok{border-width:2px;}
+  .doc-pagamento-box.doc-pagamento-alerta{border:3px dashed #000;font-size:16pt;padding:14px 18px;}
   .doc-rodape{flex:0 0 auto;}
   .doc-date-line{margin:0 0 42px;font-size:13px;color:#0f172a;}
   .doc-signature-block{margin-top:8px;}
@@ -8569,12 +8578,10 @@ function buildFormularioEntregaDoc(r) {
     ['Entregue por', r.entreguePor || '—'],
     ['Urgente', r.urgente ? 'SIM — Entrega Imediata' : 'Não'],
   ];
-  const pagoLinha = r.estadoPagamento === 'Pago'
-    ? `PAGO${r.metodoPagamento ? ' · ' + r.metodoPagamento : ''}`
-    : (r.estadoPagamento === 'Não Pago' ? `A COBRAR${r.metodoPagamento ? ' · ' + r.metodoPagamento : ''}` : '—');
-
+  const pago = r.estadoPagamento === 'Pago';
+  const aCobrar = r.estadoPagamento === 'Não Pago';
   const linhasDepois = [];
-  if (r.estadoPagamento === 'Não Pago') {
+  if (aCobrar) {
     if (r.metodoPagamento === 'Dinheiro') {
       if (r.valorAPagar !== '' && r.valorAPagar !== undefined && r.valorAPagar !== null) linhasDepois.push(['Valor a Cobrar', `${Number(r.valorAPagar).toFixed(2)}€`]);
       if (r.precisaTroco && r.troco !== '' && r.troco !== undefined && r.troco !== null) linhasDepois.push(['Troco Necessário', `${Number(r.troco).toFixed(2)}€`]);
@@ -8588,23 +8595,44 @@ function buildFormularioEntregaDoc(r) {
     h('td', { style: 'font-weight:700;width:38%;' }, label),
     h('td', {}, valor),
   ]);
-  // Estado de Pagamento em destaque — negrito, fonte maior e fundo próprio,
-  // para o estafeta identificar de imediato se há dinheiro/terminal a levar.
-  const pagamentoRow = h('tr', { class: 'doc-table-destaque-pagamento' }, [
-    h('td', {}, 'Estado de Pagamento'),
-    h('td', {}, pagoLinha),
-  ]);
 
   const tbody = h('tbody', {}, [
     ...linhasAntes.map(rowNormal),
-    pagamentoRow,
     ...linhasDepois.map(rowNormal),
   ]);
+
+  // Estado de Pagamento em destaque — desenhado como caixa autónoma com
+  // borda preta grossa e texto em maiúsculas, SEM depender de cor de
+  // fundo (muitos browsers/impressoras a laser ignoram o fundo por
+  // omissão). O símbolo [ ✓ ]/[ ⚠ ] e o texto grande garantem contraste
+  // total mesmo em impressão a preto e branco.
+  let pagamentoBox;
+  if (pago) {
+    const metodoTxt = r.metodoPagamento ? ` — ${r.metodoPagamento}` : '';
+    pagamentoBox = h('div', { class: 'doc-pagamento-box doc-pagamento-ok' }, [
+      h('span', { class: 'doc-pagamento-symbol' }, '[ ✓ ]'),
+      h('span', {}, `PAGO${metodoTxt}`),
+    ]);
+  } else if (aCobrar) {
+    const valorTxt = (r.metodoPagamento === 'Dinheiro' && r.valorAPagar !== '' && r.valorAPagar !== undefined && r.valorAPagar !== null)
+      ? ` NO ATO DA ENTREGA: ${Number(r.valorAPagar).toFixed(2)}€`
+      : (r.metodoPagamento ? ` — ${r.metodoPagamento}` : '');
+    pagamentoBox = h('div', { class: 'doc-pagamento-box doc-pagamento-alerta' }, [
+      h('span', { class: 'doc-pagamento-symbol' }, '[ ⚠ ]'),
+      h('span', {}, `A COBRAR${valorTxt}`),
+    ]);
+  } else {
+    pagamentoBox = h('div', { class: 'doc-pagamento-box' }, [
+      h('span', { class: 'doc-pagamento-symbol' }, '[ — ]'),
+      h('span', {}, 'ESTADO DE PAGAMENTO POR DEFINIR'),
+    ]);
+  }
 
   const kids = [
     buildDocLetterhead(r.farmacia),
     h('h1', { class: 'doc-title' }, 'Formulário de Entrega'),
     h('table', { class: 'doc-table' }, [tbody]),
+    pagamentoBox,
   ];
   const nomeFarmaciaDeclaracao = r.farmacia === 'Boa Nova' ? 'Farmácia Boa Nova' : 'Farmácia Juncal';
   const rodape = h('div', { class: 'doc-rodape' }, [
