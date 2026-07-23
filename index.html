@@ -5,21 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>SigaJuncal · Gestão de Pedidos</title>
 
-<!-- Progressive Web App — permite adicionar a app ao ecrã principal (mobile) ou ambiente de trabalho (PC) -->
+<!-- PWA / Samsung Internet & Mobile WebAPKs — permite adicionar a app ao ecrã
+     principal (Android/iOS) ou ambiente de trabalho (PC) em modo standalone
+     limpo, sem a barra de endereço do browser. Os ícones (icon-192.png e
+     icon-512.png) e o manifest.json vivem na raiz do repositório, ao lado
+     deste index.html. -->
+<link rel="manifest" href="./manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="SigaJuncal">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#3688b0">
-
-<!-- Ícone: logótipo oficial da SigaJuncal (icon-512.png, guardado na raiz do
-     projeto ao lado deste index.html). O manifest.json (também na raiz)
-     regista o mesmo ficheiro para o ecrã principal do telemóvel; estas
-     tags cobrem o favicon do browser e o atalho no ambiente de trabalho/iOS. -->
-<link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
-<link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
-<link rel="shortcut icon" type="image/png" href="icon-512.png">
+<meta name="application-name" content="SigaJuncal">
+<meta name="theme-color" content="#0ea5e9">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="./icon-512.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
+<link rel="shortcut icon" type="image/png" href="./icon-512.png">
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -1557,7 +1559,11 @@ function buildOrcamentosPanel(listKey, draft, rerender, bloqueado) {
 
     const valorInput = h('input', { class: 'input', type: 'number', step: '0.01', min: '0', placeholder: 'Valor €', disabled: bloqueado ? 'disabled' : undefined });
     valorInput.value = draft[vCampo] || '';
-    valorInput.addEventListener('input', () => { draft[vCampo] = valorInput.value; });
+    valorInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
+    valorInput.addEventListener('input', () => {
+      if (valorInput.value !== '' && parseFloat(valorInput.value) < 0) valorInput.value = valorInput.value.replace('-', '');
+      draft[vCampo] = valorInput.value;
+    });
 
     // Prazo: só se escreve o número — a unidade "Dias" é fixa.
     const prazoInput = h('input', { class: 'input', type: 'number', step: '1', min: '0', inputmode: 'numeric', placeholder: '0', disabled: bloqueado ? 'disabled' : undefined });
@@ -1959,6 +1965,7 @@ function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
   async function submitForm() {
     if (!String(formDraft.nomeCliente || '').trim()) { formError = 'Por favor, preencha o Nome do Cliente.'; render(); return; }
     if (!String(formDraft.contacto || '').trim()) { formError = 'Por favor, preencha o Contacto.'; render(); return; }
+    if (!/^[0-9]{9}$/.test(String(formDraft.contacto || '').trim())) { formError = 'O Contacto deve ter exatamente 9 dígitos numéricos.'; render(); return; }
     if (showForm === 'encaixe') {
       formDraft.hora = normalizarHora(formDraft.hora);
       if (!/^\d{2}:\d{2}$/.test(formDraft.hora)) {
@@ -2982,6 +2989,48 @@ function dispararNotificacaoNativa(titulo, corpo) {
     notif.onclick = () => { window.focus(); };
   } catch (e) { /* alguns browsers/SOs bloqueiam notificações fora de um Service Worker — ignora */ }
 }
+// Toca um pequeno alerta sonoro (dois "bips") via Web Audio API — não depende
+// de nenhum ficheiro de áudio externo, por isso funciona sempre, mesmo
+// offline. Usado exclusivamente pelo alerta de Nova Entrega Pendente do
+// Estafeta, para nunca passar despercebido no balcão.
+function tocarSomNotificacaoEntrega() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const bip = (freq, atraso, duracao) => {
+      setTimeout(() => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duracao);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duracao + 0.05);
+      }, atraso);
+    };
+    bip(880, 0, 0.45);
+    bip(1100, 280, 0.4);
+  } catch (e) { /* Web Audio indisponível neste browser/ambiente — ignora silenciosamente */ }
+}
+// Chamado a partir da subscrição Realtime de Entregas (farmacia_entregas)
+// sempre que chega um registo novo (INSERT) — dispara notificação nativa +
+// som EXCLUSIVAMENTE para o perfil Estafeta, e só se este tiver sessão ativa
+// neste dispositivo em concreto. Todos os restantes perfis (Master, Básico,
+// Administrador, Prestador de Serviço, Farmácia Boa Nova) nunca veem nem
+// ouvem este alerta — a lista de Entregas continua a atualizar-se na mesma
+// para eles, só sem o pop-up/som, para não gerar ruído fora do contexto.
+function handleNovaEntregaPendente(entrega) {
+  if (!entrega || !activeUser) return;
+  if (!isEstafeta()) return;
+  const cliente = entrega.nomeCliente || 'Cliente';
+  const farmacia = entrega.farmacia ? ` — Farmácia ${entrega.farmacia}` : '';
+  dispararNotificacaoNativa('🛵 Nova Entrega Pendente', `${cliente}${farmacia}`);
+  tocarSomNotificacaoEntrega();
+}
 // Chamado a partir da subscrição Realtime do Chat sempre que chega uma
 // mensagem nova (INSERT) — atualiza o badge nativo do ícone da app e, se a
 // pessoa não estiver a ver o Chat, dispara também uma notificação do sistema.
@@ -3246,6 +3295,24 @@ function checkRequiredFields(draft, schema) {
   const fieldNames = schema.map(f => f.name);
   return getRequiredFieldNames(schema).filter(name => fieldNames.includes(name) && !String(draft[name] || '').trim());
 }
+// Valida o FORMATO (não a obrigatoriedade) de campos com "pattern" definido
+// no schema — ex: Contacto (exatamente 9 dígitos) ou Cartão de Cidadão
+// (exatamente 8 dígitos). Só valida quando o campo tem valor (a
+// obrigatoriedade em si já é tratada por checkRequiredFields); um campo
+// opcional vazio não é aqui rejeitado. Devolve a mensagem de erro do
+// primeiro campo inválido encontrado, ou '' se estiver tudo certo.
+function checkFieldFormats(draft, schema) {
+  for (const f of schema) {
+    if (!f.pattern) continue;
+    const v = String(draft[f.name] || '').trim();
+    if (!v) continue;
+    const re = new RegExp('^' + f.pattern + '$');
+    if (!re.test(v)) {
+      return `${f.label} inválido — deve ter exatamente ${f.maxLength || 'o número certo de'} dígitos.`;
+    }
+  }
+  return '';
+}
 function buildRequiredMessage(missing, schema) {
   if (missing.length === 0) return '';
   const fieldNames = schema.map(f => f.name);
@@ -3435,9 +3502,15 @@ function buildField(field, draft) {
     control.value = draft[field.name] || '';
     control.addEventListener('keydown', (e) => {
       if (e.key === '.' || e.key === ',') e.preventDefault();
+      if (e.key === '-' && !field.allowNegative) e.preventDefault();
     });
     control.addEventListener('input', () => {
-      const cleaned = sanitizeIntegerInput(control.value);
+      let cleaned = sanitizeIntegerInput(control.value);
+      // O sinal "-" só é permitido em campos explicitamente marcados como
+      // allowNegative (ex: Erros de Stock) — em todos os outros, um "-"
+      // colado/escrito de outra forma (autofill, copiar/colar) é sempre
+      // removido aqui, e não só bloqueado no keydown.
+      if (!field.allowNegative && cleaned.charAt(0) === '-') cleaned = cleaned.slice(1);
       if (cleaned !== control.value) control.value = cleaned;
       draft[field.name] = control.value;
     });
@@ -3468,11 +3541,21 @@ function buildField(field, draft) {
       min: (field.type === 'number' && !field.allowNegative) ? '0' : undefined,
     });
     control.value = draft[field.name] || '';
+    if (field.type === 'number' && !field.allowNegative) {
+      control.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
+    }
     control.addEventListener('input', () => {
       let v = control.value;
       if (field.digitsOnly) {
         const cleaned = v.replace(/\D/g, '');
         if (cleaned !== v) { control.value = cleaned; v = cleaned; }
+      }
+      // Segunda barreira (além do keydown) contra valores negativos em
+      // campos financeiros/quantidades — cobre colar/autofill, que o
+      // keydown não apanha.
+      if (field.type === 'number' && !field.allowNegative && v !== '' && parseFloat(v) < 0) {
+        v = v.replace('-', '');
+        control.value = v;
       }
       draft[field.name] = v;
     });
@@ -3624,6 +3707,12 @@ function openRecordModal(listKey, schema, record, title, onSaved) {
     const missing = checkRequiredFields(draft, schema);
     if (missing.length) {
       errorMsg.textContent = buildRequiredMessage(missing, schema);
+      errorMsg.style.display = '';
+      return;
+    }
+    const formatoInvalido = checkFieldFormats(draft, schema);
+    if (formatoInvalido) {
+      errorMsg.textContent = formatoInvalido;
       errorMsg.style.display = '';
       return;
     }
@@ -3842,6 +3931,8 @@ function buildOrtopediaPage(container, goTo) {
       rerender();
       return;
     }
+    const formatoInvalido = checkFieldFormats(draft, ortopediaSchema);
+    if (formatoInvalido) { formError = formatoInvalido; rerender(); return; }
     // Fora do produto "Meias de Compressão", Tipo/Cor/Biqueira/Medidas não
     // fazem sentido — e vice-versa para o Nome do Artigo — limpa o que não
     // se aplica para não deixar dados desatualizados escondidos no registo.
@@ -4022,6 +4113,8 @@ function buildCategoryPage(container, title, icon, subtitle, schema, listKey, go
       rerender();
       return;
     }
+    const formatoInvalido = checkFieldFormats(draft, schema);
+    if (formatoInvalido) { formError = formatoInvalido; rerender(); return; }
     formError = '';
     draft.responsavel = currentUserName();
     normalizeNameFields(draft);
@@ -4983,6 +5076,10 @@ function calcInputField(label, defaultValue, span2) {
     placeholder: '0,00',
   });
   input.value = (defaultValue === undefined || defaultValue === null || defaultValue === '') ? '' : String(defaultValue);
+  input.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
+  input.addEventListener('input', () => {
+    if (input.value !== '' && parseFloat(input.value) < 0) input.value = input.value.replace('-', '');
+  });
   const field = h('div', { class: 'calc-field' + (span2 ? ' span2' : '') }, [h('label', {}, label), input]);
   return { field, input };
 }
@@ -5357,6 +5454,8 @@ function buildReclamacoesPage(container, goTo) {
       rerender();
       return;
     }
+    const formatoInvalido = checkFieldFormats(draft, reclamacoesSchema);
+    if (formatoInvalido) { formError = formatoInvalido; rerender(); return; }
     formError = '';
     draft.responsavel = currentUserName();
     normalizeNameFields(draft);
@@ -5901,6 +6000,7 @@ function buildEventoDiaModal(tipo, dateISO, evento, onSaved) {
   async function submitForm() {
     if (!String(formDraft.nomeCliente || '').trim()) { formError = 'Por favor, preencha o Nome do Cliente.'; render(); return; }
     if (!String(formDraft.contacto || '').trim()) { formError = 'Por favor, preencha o Contacto.'; render(); return; }
+    if (!/^[0-9]{9}$/.test(String(formDraft.contacto || '').trim())) { formError = 'O Contacto deve ter exatamente 9 dígitos numéricos.'; render(); return; }
     let hora = showForm.hora;
     if (showForm.encaixe) {
       formDraft.hora = normalizarHora(formDraft.hora);
@@ -6736,10 +6836,18 @@ function buildObjetivosPage(container, goTo, embedded) {
       nomeInput.addEventListener('input', () => { p.nome = nomeInput.value; });
       const metaInput = h('input', { class: 'input doc-item-preco', type: 'number', min: '0', placeholder: 'Meta (un.)' });
       metaInput.value = p.meta || '';
-      metaInput.addEventListener('input', () => { p.meta = metaInput.value; });
+      metaInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
+      metaInput.addEventListener('input', () => {
+        if (metaInput.value !== '' && parseFloat(metaInput.value) < 0) metaInput.value = metaInput.value.replace('-', '');
+        p.meta = metaInput.value;
+      });
       const atualInput = h('input', { class: 'input doc-item-preco', type: 'number', min: '0', placeholder: 'Vendas Atuais' });
       atualInput.value = p.atual || '0';
-      atualInput.addEventListener('input', () => { p.atual = atualInput.value; });
+      atualInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
+      atualInput.addEventListener('input', () => {
+        if (atualInput.value !== '' && parseFloat(atualInput.value) < 0) atualInput.value = atualInput.value.replace('-', '');
+        p.atual = atualInput.value;
+      });
       const delBtn = h('button', { class: 'btn-fab-sm tone-red', title: 'Remover', 'aria-label': 'Remover' }, Icon('trash', { size: 12, strokeWidth: 2.2 }));
       delBtn.addEventListener('click', () => { draft.produtos.splice(idx, 1); if (draft.produtos.length === 0) draft.produtos.push({ nome: '', meta: '', atual: '0' }); rerender(); });
       return h('div', { class: 'doc-item-row' }, [nomeInput, metaInput, atualInput, delBtn]);
@@ -7134,6 +7242,10 @@ function buildDeclaracaoDespesasPage(container, goTo) {
       alert('Por favor, preencha o Nome do Utente e o Cartão de Cidadão.');
       return;
     }
+    if (!/^[0-9]{8}$/.test(String(draft.ccUtente || '').trim())) {
+      alert('O Cartão de Cidadão deve ter exatamente 8 dígitos numéricos.');
+      return;
+    }
     saving = true; rerender();
     const dataEmissao = todayISO();
     const registo = {
@@ -7184,7 +7296,11 @@ function buildDeclaracaoDespesasPage(container, goTo) {
     if (!draft.discriminado) {
       const valorInput = h('input', { class: 'input', type: 'number', step: '0.01', min: '0', placeholder: '0,00' });
       valorInput.value = draft.valorTotalManual;
-      valorInput.addEventListener('input', () => { draft.valorTotalManual = valorInput.value; });
+      valorInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
+      valorInput.addEventListener('input', () => {
+        if (valorInput.value !== '' && parseFloat(valorInput.value) < 0) valorInput.value = valorInput.value.replace('-', '');
+        draft.valorTotalManual = valorInput.value;
+      });
       campos.push(h('div', { class: 'field doc-w-40' }, [h('label', {}, 'Valor Total (€)'), valorInput]));
     }
     const formChildren = [h('div', { class: 'doc-fields-row' }, campos), linhaCheckbox];
@@ -7196,7 +7312,11 @@ function buildDeclaracaoDespesasPage(container, goTo) {
         nomeProdInput.addEventListener('input', () => { it.nome = nomeProdInput.value; });
         const precoInput = h('input', { class: 'input doc-item-preco', type: 'number', step: '0.01', min: '0', placeholder: 'Preço €' });
         precoInput.value = it.preco;
-        precoInput.addEventListener('input', () => { it.preco = precoInput.value; totalLabel.textContent = `Total: ${calcularTotal().toFixed(2).replace('.', ',')} €`; });
+        precoInput.addEventListener('keydown', (e) => { if (e.key === '-') e.preventDefault(); });
+        precoInput.addEventListener('input', () => {
+          if (precoInput.value !== '' && parseFloat(precoInput.value) < 0) precoInput.value = precoInput.value.replace('-', '');
+          it.preco = precoInput.value; totalLabel.textContent = `Total: ${calcularTotal().toFixed(2).replace('.', ',')} €`;
+        });
         const delBtn = h('button', { class: 'btn-fab-sm tone-red', title: 'Remover', 'aria-label': 'Remover' }, Icon('trash', { size: 12, strokeWidth: 2.2 }));
         delBtn.addEventListener('click', () => { draft.itens.splice(idx, 1); if (draft.itens.length === 0) draft.itens.push({ nome: '', preco: '' }); rerender(); });
         return h('div', { class: 'doc-item-row' }, [nomeProdInput, precoInput, delBtn]);
@@ -7277,6 +7397,10 @@ function buildDeclaracaoAvaliacaoFisicaPage(container, goTo) {
       alert('Por favor, preencha o Nome do Utente e o Cartão de Cidadão.');
       return;
     }
+    if (!/^[0-9]{8}$/.test(String(draft.ccUtente || '').trim())) {
+      alert('O Cartão de Cidadão deve ter exatamente 8 dígitos numéricos.');
+      return;
+    }
     saving = true; rerender();
     const dataEmissao = todayISO();
     const registo = {
@@ -7307,9 +7431,13 @@ function buildDeclaracaoAvaliacaoFisicaPage(container, goTo) {
     const nomeInput = h('input', { class: 'input' });
     nomeInput.value = draft.nomeUtente;
     nomeInput.addEventListener('input', () => { draft.nomeUtente = nomeInput.value; });
-    const ccInput = h('input', { class: 'input' });
+    const ccInput = h('input', { class: 'input', inputmode: 'numeric', pattern: '[0-9]{8}', maxlength: '8', placeholder: '8 dígitos' });
     ccInput.value = draft.ccUtente;
-    ccInput.addEventListener('input', () => { draft.ccUtente = ccInput.value; });
+    ccInput.addEventListener('input', () => {
+      const cleaned = ccInput.value.replace(/\D/g, '').slice(0, 8);
+      if (cleaned !== ccInput.value) ccInput.value = cleaned;
+      draft.ccUtente = ccInput.value;
+    });
     const nascInput = h('input', { class: 'input', type: 'date' });
     nascInput.value = draft.dataNascimento;
     nascInput.addEventListener('input', () => { draft.dataNascimento = nascInput.value; });
@@ -7396,6 +7524,10 @@ function buildDeclaracaoPresencaPage(container, goTo) {
       alert('Por favor, preencha o Nome do Utente e o Cartão de Cidadão.');
       return;
     }
+    if (!/^[0-9]{8}$/.test(String(draft.ccUtente || '').trim())) {
+      alert('O Cartão de Cidadão deve ter exatamente 8 dígitos numéricos.');
+      return;
+    }
     saving = true; rerender();
     const dataEmissao = todayISO();
     const registo = {
@@ -7426,9 +7558,13 @@ function buildDeclaracaoPresencaPage(container, goTo) {
     const nomeInput = h('input', { class: 'input' });
     nomeInput.value = draft.nomeUtente;
     nomeInput.addEventListener('input', () => { draft.nomeUtente = nomeInput.value; });
-    const ccInput = h('input', { class: 'input' });
+    const ccInput = h('input', { class: 'input', inputmode: 'numeric', pattern: '[0-9]{8}', maxlength: '8', placeholder: '8 dígitos' });
     ccInput.value = draft.ccUtente;
-    ccInput.addEventListener('input', () => { draft.ccUtente = ccInput.value; });
+    ccInput.addEventListener('input', () => {
+      const cleaned = ccInput.value.replace(/\D/g, '').slice(0, 8);
+      if (cleaned !== ccInput.value) ccInput.value = cleaned;
+      draft.ccUtente = ccInput.value;
+    });
     const tipoSelect = h('select', { class: 'select' }, TIPOS_SERVICO_PRESENCA.map(t => h('option', { value: t, selected: draft.tipoServico === t ? 'selected' : undefined }, t)));
     tipoSelect.value = draft.tipoServico;
     tipoSelect.addEventListener('change', () => { draft.tipoServico = tipoSelect.value; rerender(); });
@@ -8128,6 +8264,8 @@ function buildMapa48hPage(container, goTo) {
       rerender();
       return;
     }
+    const formatoInvalido = checkFieldFormats(draft, mapa48hSchema);
+    if (formatoInvalido) { formError = formatoInvalido; rerender(); return; }
     const conflito = mapa48hConflito(draft.dataInicio, editingId);
     if (conflito) {
       formError = `ATENÇÃO: Agendamento bloqueado. O aparelho já tem uma marcação em ${formatDate(conflito.dataInicio)} (${conflito.nomeCliente || 'sem nome'}). Tem de haver pelo menos 3 dias (72h) de intervalo entre exames. Próxima data disponível: ${formatDate(mapa48hProximaDataDisponivel(editingId))}.`;
@@ -8877,6 +9015,8 @@ function buildEntregasPage(container, goTo) {
       rerender();
       return;
     }
+    const formatoInvalido = checkFieldFormats(draft, entregasSchema);
+    if (formatoInvalido) { formError = formatoInvalido; rerender(); return; }
     if (entregaBlocoExpirado(draft.blocoHorario, draft.dataEntrega) && !draft.urgente) {
       alert('Este bloco horário já expirou para o dia de hoje. Para realizar uma entrega fora de prazo/imediata, deve assinalar a opção "URGENTE — Entrega Imediata".');
       return;
@@ -10322,8 +10462,14 @@ function setupRealtime() {
   if (!sb) return;
   Object.keys(TABLES).forEach(listKey => {
     sb.channel('realtime-' + TABLES[listKey])
-      .on('postgres_changes', { event: '*', schema: 'public', table: TABLES[listKey] }, async () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: TABLES[listKey] }, async (payload) => {
         STATE[listKey] = await dbFetchAll(listKey);
+        // Notificação nativa de "Nova Entrega Pendente" — exclusiva da tabela
+        // de Entregas e só quando é mesmo um registo novo (INSERT); a
+        // verificação de perfil (só Estafeta) acontece dentro da função.
+        if (listKey === 'entregas' && payload.eventType === 'INSERT' && payload.new) {
+          handleNovaEntregaPendente(rowToRecord(payload.new));
+        }
         render();
       })
       .subscribe();
@@ -10594,17 +10740,26 @@ function buildSidebarBadgeSlotContent() {
   return [h('div', { class: 'active-user-card' }, [badge, modoTesteBtn])];
 }
 
-/* ---- Expiração de sessão por 30s de inatividade (bloqueia a app) ---- */
-// Já não existe ecrã de bloqueio. Ao fim de 30s sem interação, a sessão do
-// utilizador é simplesmente limpa da memória — a app continua exatamente
-// como estava no ecrã, só o badge da sidebar muda para "Iniciar Turno".
+/* ---- Expiração de sessão por inatividade (bloqueia a app) ----
+   Já não existe ecrã de bloqueio. Ao fim do tempo limite sem interação, a
+   sessão do utilizador é simplesmente limpa da memória — a app continua
+   exatamente como estava no ecrã, só o badge da sidebar muda para "Iniciar
+   Turno".
+   Limite alargado para 1 hora (Estafeta e Prestador de Serviço): estes
+   perfis trabalham tipicamente "fora do balcão" (na rua a fazer entregas,
+   ou numa sala de atendimento), com longos períodos sem tocar no
+   ecrã/telemóvel entre uma ação e a seguinte — 30s seria demasiado
+   agressivo e obrigaria a autenticações constantes. Todos os restantes
+   perfis mantêm o limite padrão, mais curto, por estarem sempre junto ao
+   posto de trabalho. */
 const INACTIVITY_LIMIT_MS = 30000;
+const INACTIVITY_LIMIT_ESTAFETA_PRESTADOR_MS = 60 * 60 * 1000; // 1 hora (3600s)
 let inactivityTimer = null;
 function resetInactivityTimer() {
   if (inactivityTimer) clearTimeout(inactivityTimer);
-  if (isEstafeta()) return; // sem limite de inatividade para este perfil
   if (modoTesteAtivo) return; // bloqueio automático suspenso pelo Modo de Teste do Administrador
-  inactivityTimer = setTimeout(clearSessionSilently, INACTIVITY_LIMIT_MS);
+  const limite = (isEstafeta() || isPrestadorServico()) ? INACTIVITY_LIMIT_ESTAFETA_PRESTADOR_MS : INACTIVITY_LIMIT_MS;
+  inactivityTimer = setTimeout(clearSessionSilently, limite);
 }
 function clearSessionSilently() {
   if (!activeUser) return;
