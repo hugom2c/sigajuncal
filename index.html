@@ -4942,9 +4942,13 @@ function buildErrosPage(container, goTo) {
     return h('div', { class: 'field' + (f.size ? ' field-' + f.size : '') }, kids);
   }
   async function submit() {
-    const missing = checkRequiredFields(draft, errosSchema);
-    if (missing.length) {
-      formError = buildRequiredMessage(missing, errosSchema);
+    // Data deixou de ser obrigatória — se ficar em branco por algum motivo,
+    // assume hoje em silêncio, sem incomodar quem está a registar o erro.
+    if (!String(draft.data || '').trim()) draft.data = todayISO();
+    // Único requisito real: Produto preenchido, ou CNP/Código preenchido
+    // (que já identifica o produto sozinho, mesmo sem o nome escrito).
+    if (!String(draft.produto || '').trim() && !String(draft.cnp || '').trim()) {
+      formError = 'Por favor, preencha o Produto ou o CNP / Código.';
       rerender();
       return;
     }
