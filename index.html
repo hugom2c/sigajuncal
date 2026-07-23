@@ -3729,6 +3729,31 @@ function confirmDialog(message, onConfirm, opts) {
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 }
+// Popup de 3 opções — usado especificamente ao marcar uma entrega "A
+// Cobrar" como Entregue, para nunca perder de vista dinheiro/pagamento por
+// cobrar só porque a entrega já foi feita. onEscolhaPago é chamado com
+// true (marcar Pago + Entregue), false (manter A Cobrar + marcar Entregue),
+// ou nunca (Cancelar — não faz nada).
+function confirmarPagamentoEntregaDialog(onEscolhaPago) {
+  const overlay = h('div', { class: 'modal-overlay' });
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
+  const pagoBtn = h('button', { class: 'btn btn-primary', onclick: () => { close(); onEscolhaPago(true); } },
+    'Sim, marcar como PAGO e Entregue');
+  const manterBtn = h('button', { class: 'btn btn-secondary', onclick: () => { close(); onEscolhaPago(false); } },
+    "Manter 'A Cobrar' e marcar Entregue");
+  const cancelBtn = h('button', { class: 'btn btn-secondary', style: 'color:var(--red);', onclick: close }, 'Cancelar');
+  const panel = h('div', { class: 'modal-panel confirm-panel' }, [
+    h('p', { class: 'modal-title', style: 'margin-bottom:10px;' }, 'Confirmar Pagamento da Entrega'),
+    h('p', { class: 'confirm-message' },
+      "Esta entrega consta como 'A Cobrar'. O valor foi cobrado e o pagamento efetuado no ato da entrega?"),
+    h('div', { class: 'form-actions', style: 'flex-direction:column;align-items:stretch;gap:10px;' }, [pagoBtn, manterBtn, cancelBtn]),
+  ]);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
 
 function buildReadOnlyField(field, record) {
   const colClass = field.col === 2 ? ' span2' : (field.size ? ' field-' + field.size : '');
@@ -9200,6 +9225,22 @@ function buildEntregasPage(container, goTo) {
   }
 
   function marcarEntregue(id) {
+    const registo = STATE.entregas.find(r => r.id === id);
+    // Entrega "A Cobrar" (ou sem estado de pagamento definido) — pergunta
+    // explicitamente se o dinheiro/pagamento foi mesmo cobrado no ato,
+    // antes de a entrega sair da lista de Pendentes e correr o risco de
+    // ficar esquecida por cobrar.
+    if (registo && registo.estadoPagamento !== 'Pago') {
+      confirmarPagamentoEntregaDialog(async (marcarComoPago) => {
+        const patch = { estadoEntrega: 'Entregue', horaEntregaReal: new Date().toISOString() };
+        if (marcarComoPago) patch.estadoPagamento = 'Pago';
+        const updated = await dbUpdate('entregas', id, patch);
+        if (updated) { STATE.entregas = STATE.entregas.map(r => r.id === id ? updated : r); selectedIds = new Set([...selectedIds].filter(x => x !== id)); showForm = false; rerender(); }
+        else showDbErrorToast('Não foi possível marcar como entregue');
+      });
+      return;
+    }
+    // Já estava "Pago" — segue diretamente, sem o popup de confirmação de pagamento.
     confirmDialog('Confirma que esta entrega já foi feita? Vai passar para o histórico desta farmácia.', async () => {
       const updated = await dbUpdate('entregas', id, { estadoEntrega: 'Entregue', horaEntregaReal: new Date().toISOString() });
       if (updated) { STATE.entregas = STATE.entregas.map(r => r.id === id ? updated : r); selectedIds = new Set([...selectedIds].filter(x => x !== id)); showForm = false; rerender(); }
