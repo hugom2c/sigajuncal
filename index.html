@@ -235,9 +235,10 @@
 
   /* Documentos — linha de produto discriminado */
   .doc-item-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;}
+  .doc-item-row .doc-item-cnp{width:140px;max-width:100%;}
   .doc-item-row .doc-item-nome{width:320px;max-width:100%;}
   .doc-item-row .doc-item-preco{width:112px;max-width:100%;}
-  @media (max-width:640px){.doc-item-row .doc-item-nome,.doc-item-row .doc-item-preco{width:100%;}}
+  @media (max-width:640px){.doc-item-row .doc-item-cnp,.doc-item-row .doc-item-nome,.doc-item-row .doc-item-preco{width:100%;}}
   .doc-medidas-row{display:flex;gap:16px;flex-wrap:wrap;}
   .doc-medida-field{width:160px;max-width:100%;}
   /* Larguras compactas para os campos dos formulários de Documentos —
@@ -7613,7 +7614,7 @@ function buildObjetivosPage(container, goTo, embedded) {
   let selectedIds = new Set();
 
   function rerender() { clear(container); container.appendChild(build()); }
-  function openNew() { draft = { titulo: '', dataInicio: todayISO(), dataFim: '', ativo: 'Sim', produtos: [{ nome: '', meta: '', atual: '0' }] }; editingId = null; formError = ''; showForm = true; rerender(); }
+  function openNew() { draft = { titulo: '', dataInicio: todayISO(), dataFim: '', ativo: 'Sim', produtos: [{ cnp: '', nome: '', meta: '', atual: '0' }] }; editingId = null; formError = ''; showForm = true; rerender(); }
   function openEditSelected() {
     if (selectedIds.size !== 1) return;
     const o = STATE.objetivos.find(x => x.id === [...selectedIds][0]);
@@ -7635,6 +7636,13 @@ function buildObjetivosPage(container, goTo, embedded) {
     formError = '';
     draft.responsavel = currentUserName();
     draft.produtos = draft.produtos.filter(p => String(p.nome || '').trim());
+    // Ensina o dicionário global de CNP com os pares confirmados aqui —
+    // mesmo mecanismo do resto da app — para autopreencher mais depressa da
+    // próxima vez que este código aparecer, seja em Objetivos, Validades ou
+    // Erros de Stock.
+    draft.produtos.forEach(p => {
+      if (String(p.cnp || '').trim() && String(p.nome || '').trim()) dbUpsertDicionarioCnp(p.cnp, p.nome);
+    });
     saving = true; rerender();
     if (editingId) {
       const updated = await dbUpdate('objetivos', editingId, draft);
@@ -7703,6 +7711,37 @@ function buildObjetivosPage(container, goTo, embedded) {
     const grid = h('div', { class: 'form-grid' }, camposEl);
 
     const linhasEl = draft.produtos.map((p, idx) => {
+      // CNP/EAN antes do Nome — bipa ou escreve o código e o Nome do
+      // Produto preenche-se sozinho a partir do dicionário global (mesmo
+      // mecanismo já usado em Validades e Erros de Stock), continuando
+      // sempre editável para ajustes manuais.
+      const cnpInput = h('input', { class: 'input doc-item-cnp', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', placeholder: 'CNP / EAN / Código' });
+      cnpInput.value = p.cnp || '';
+      let cnpDebounce = null;
+      let ultimoCnpConsultado = '';
+      async function consultarCnpEPreencher() {
+        const cnpAtual = String(p.cnp || '').trim();
+        if (!cnpAtual || cnpAtual === ultimoCnpConsultado) return;
+        ultimoCnpConsultado = cnpAtual;
+        if (String(p.nome || '').trim()) return; // já tem nome escrito à mão — nunca o substitui
+        const nomeEncontrado = await dbBuscarProdutoPorCnp(cnpAtual);
+        if (String(p.cnp || '').trim() !== cnpAtual || String(p.nome || '').trim()) return;
+        if (nomeEncontrado) { p.nome = nomeEncontrado; nomeInput.value = nomeEncontrado; rerender(); }
+      }
+      cnpInput.addEventListener('input', () => {
+        // Só algarismos — nunca deixa passar letras ou caracteres especiais.
+        cnpInput.value = cnpInput.value.replace(/[^0-9]/g, '');
+        p.cnp = cnpInput.value;
+        ultimoCnpConsultado = '';
+        if (cnpDebounce) clearTimeout(cnpDebounce);
+        cnpDebounce = setTimeout(consultarCnpEPreencher, 350);
+      });
+      cnpInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); if (cnpDebounce) clearTimeout(cnpDebounce); consultarCnpEPreencher(); }
+      });
+      cnpInput.addEventListener('change', () => { if (cnpDebounce) clearTimeout(cnpDebounce); consultarCnpEPreencher(); });
+      cnpInput.addEventListener('blur', () => { if (cnpDebounce) clearTimeout(cnpDebounce); consultarCnpEPreencher(); });
+
       const nomeInput = h('input', { class: 'input doc-item-nome', placeholder: 'Nome do Produto', maxlength: '150' });
       nomeInput.value = p.nome || '';
       nomeInput.addEventListener('input', () => { p.nome = nomeInput.value; });
@@ -7721,10 +7760,10 @@ function buildObjetivosPage(container, goTo, embedded) {
         p.atual = atualInput.value;
       });
       const delBtn = h('button', { class: 'btn-fab-sm tone-red', title: 'Remover', 'aria-label': 'Remover' }, Icon('trash', { size: 12, strokeWidth: 2.2 }));
-      delBtn.addEventListener('click', () => { draft.produtos.splice(idx, 1); if (draft.produtos.length === 0) draft.produtos.push({ nome: '', meta: '', atual: '0' }); rerender(); });
-      return h('div', { class: 'doc-item-row' }, [nomeInput, metaInput, atualInput, delBtn]);
+      delBtn.addEventListener('click', () => { draft.produtos.splice(idx, 1); if (draft.produtos.length === 0) draft.produtos.push({ cnp: '', nome: '', meta: '', atual: '0' }); rerender(); });
+      return h('div', { class: 'doc-item-row' }, [cnpInput, nomeInput, metaInput, atualInput, delBtn]);
     });
-    const addBtn = h('button', { class: 'btn btn-secondary', onclick: () => { draft.produtos.push({ nome: '', meta: '', atual: '0' }); rerender(); } }, [Icon('plus', { size: 14 }), ' Adicionar Produto']);
+    const addBtn = h('button', { class: 'btn btn-secondary', onclick: () => { draft.produtos.push({ cnp: '', nome: '', meta: '', atual: '0' }); rerender(); } }, [Icon('plus', { size: 14 }), ' Adicionar Produto']);
     const metaPreview = draft.produtos.reduce((s, p) => s + (parseFloat(p.meta) || 0), 0);
     const atualPreview = draft.produtos.reduce((s, p) => s + (parseFloat(p.atual) || 0), 0);
     const totalLabel = h('p', { class: 'login-sub', style: 'text-align:right;font-weight:800;margin-top:10px;' }, `Total: ${Math.round(atualPreview)} / ${Math.round(metaPreview)} un.`);
