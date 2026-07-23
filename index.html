@@ -4985,7 +4985,7 @@ function buildHomepage(container, goTo) {
     h('div', { class: 'stat-icon' }, Icon('truck', { size: 19 })),
     h('div', { style: 'min-width:0;' }, [
       h('p', { class: 'stat-label' }, 'Entregas Pendentes'),
-      h('p', { class: 'next-evento-card-title' }, `${entregasCounts.juncal} para a Farmácia Juncal`),
+      h('p', { class: 'next-evento-card-title' }, `${entregasCounts.juncal} entregas pendentes`),
     ]),
   ]);
 
@@ -10043,7 +10043,7 @@ function buildEntregasPage(container, goTo) {
     if (list.length === 0) {
       const msg = searchQuery
         ? 'Nenhum resultado para essa pesquisa.'
-        : (activeTab === 'historico' ? `Ainda não há entregas concluídas da Farmácia ${farmaciaAtiva}.` : `Sem entregas pendentes da Farmácia ${farmaciaAtiva}.`);
+        : (activeTab === 'historico' ? 'Ainda não há entregas concluídas.' : 'Sem entregas pendentes.');
       return EmptyState(msg);
     }
     const thead = h('thead', {}, h('tr', {}, ['', 'Prazo', 'Cliente', 'Morada', 'Contacto', 'Data', 'Bloco Horário', 'Pagamento', 'Estado', ''].map(t => h('th', {}, t))));
@@ -10199,10 +10199,10 @@ function buildEntregasPage(container, goTo) {
     const historicoCount = STATE.entregas.filter(r => r.farmacia === farmaciaAtiva && r.estadoEntrega === 'Entregue').length;
     const tabsRow = h('div', { class: 'tabs-row' }, [
       h('button', { class: 'tab-btn tone-orange' + (activeTab === 'pendentes' ? ' active' : ''), onclick: () => { activeTab = 'pendentes'; selectedIds = new Set(); rerender(); } }, [
-        Icon('truck', { size: 14 }), h('span', {}, `Entregas Pendentes da ${farmaciaAtiva}`), h('span', { class: 'tab-count' }, String(pendentesCount)),
+        Icon('truck', { size: 14 }), h('span', {}, 'Entregas Pendentes'), h('span', { class: 'tab-count' }, String(pendentesCount)),
       ]),
       h('button', { class: 'tab-btn tone-green' + (activeTab === 'historico' ? ' active' : ''), onclick: () => { activeTab = 'historico'; selectedIds = new Set(); rerender(); } }, [
-        Icon('checkcircle', { size: 14 }), h('span', {}, `Histórico da ${farmaciaAtiva}`), h('span', { class: 'tab-count' }, String(historicoCount)),
+        Icon('checkcircle', { size: 14 }), h('span', {}, 'Histórico'), h('span', { class: 'tab-count' }, String(historicoCount)),
       ]),
     ]);
     wrap.appendChild(tabsRow);
@@ -11191,6 +11191,17 @@ function render() {
   const root = document.getElementById('root');
   clear(root);
 
+  // Ajuste puramente visual: a margem a piscar do Modo de Teste só é mesmo
+  // mostrada ao Administrador que a ativou. Para Estafeta e Farmácia Boa
+  // Nova — perfis cujo acesso já está fixo e condicionado à sua área
+  // própria — a animação nunca aparece, mesmo que `modoTesteAtivo` esteja
+  // globalmente ligado (ex: um Administrador ativou-o antes, no mesmo
+  // dispositivo partilhado). Isto NUNCA mexe em `modoTesteAtivo`, no
+  // temporizador, nem em qualquer permissão — só decide se a classe CSS
+  // que desenha a borda a piscar deve ou não estar visível para quem está
+  // a ver o ecrã neste preciso momento.
+  atualizarVisibilidadeOverlayModoTeste();
+
   // A Página Inicial (Mensagem do Dia + Badges + Calendário) é sempre
   // visível sem login individual — só a navegação para os setores e as
   // ações de escrita exigem sessão ativa (ver buildSidebarContent e
@@ -11679,6 +11690,16 @@ function getModoTesteOverlay() {
     document.body.appendChild(el);
   }
   return el;
+}
+// Só ajusta a classe visual — nunca lê nem escreve em `modoTesteAtivo`.
+// Estafeta e Farmácia Boa Nova nunca veem a margem a piscar, mesmo que o
+// Modo de Teste esteja ativo globalmente (ex: dispositivo partilhado onde
+// um Administrador o ligou antes) — o acesso deles já está fixo à sua
+// área própria, por isso o aviso não lhes diz respeito e só seria ruído.
+function atualizarVisibilidadeOverlayModoTeste() {
+  const overlay = getModoTesteOverlay();
+  const podeVer = modoTesteAtivo && !isEstafeta() && !isBoaNovaOperador();
+  overlay.classList.toggle('ativo', podeVer);
 }
 function modoTesteTempoRestanteLabel() {
   if (!modoTesteAtivo || !modoTesteFimEm) return '';
