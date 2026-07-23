@@ -543,6 +543,9 @@
   .badge-em-uso{display:inline-flex;align-items:center;gap:4px;margin-top:5px;font-size:10px;
     font-weight:800;color:#c2410c;background:#ffedd5;border:1px solid #fdba74;border-radius:6px;
     padding:2px 7px;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap;}
+  .badge-em-uso-off{display:inline-flex;align-items:center;gap:4px;margin-top:5px;font-size:10px;
+    font-weight:700;color:var(--pharm-500);background:var(--pharm-50);border:1px solid var(--pharm-200);
+    border-radius:6px;padding:2px 7px;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap;}
   .progress-track{flex:1;height:8px;border-radius:6px;background:var(--pharm-100);overflow:hidden;min-width:70px;}
   .progress-fill{height:100%;border-radius:6px;transition:width .3s ease,background-color .3s ease;}
 
@@ -2748,16 +2751,9 @@ function mapa48hConflito(novaDataInicio, excludeId) {
   }
   return null;
 }
-// Verifica se o aparelho está fisicamente colocado neste utente neste
-// exato momento (data/hora atual dentro do intervalo início–fim do exame).
-function mapa48hAUso(r) {
-  if (!r.dataInicio || r.estadoEntrega === 'Já entregou') return false;
-  const agora = new Date();
-  const inicio = new Date(r.dataInicio + 'T00:00:00');
-  // Sem data de fim definida, assume-se o período padrão de 48h a partir do início.
-  const fim = r.dataFim ? new Date(r.dataFim + 'T23:59:59') : new Date(inicio.getTime() + 48 * 60 * 60 * 1000);
-  return agora >= inicio && agora <= fim;
-}
+// Nota: o estado "Aparelho a Uso" deixou de ser calculado automaticamente
+// pela data — passou a ser um controlo manual (ver toggleEmUso), porque só
+// a equipa sabe ao certo quando o aparelho foi mesmo entregue ao utente.
 
 /* =================================================================
    SUPABASE — LIGAÇÃO E CAMADA DE ACESSO A DADOS
@@ -4864,7 +4860,17 @@ function buildErrosPage(container, goTo) {
   let selectedIds = new Set();
 
   function rerender() { clear(container); container.appendChild(build()); }
-  function openNew() { draft = emptyRecord(errosSchema); editingId = null; formError = ''; showForm = true; rerender(); }
+  function openNew() {
+    draft = emptyRecord(errosSchema);
+    // Data preenchida logo com hoje (continua editável) e foco automático
+    // no CNP — no balcão, o passo seguinte é quase sempre bipar o código.
+    draft.data = todayISO();
+    editingId = null; formError = ''; showForm = true; rerender();
+    setTimeout(() => {
+      const campoCnp = document.getElementById('erro-cnp-input');
+      if (campoCnp) campoCnp.focus();
+    }, 0);
+  }
   function openEditSelected() {
     if (selectedIds.size !== 1) return;
     const id = [...selectedIds][0];
@@ -4879,7 +4885,7 @@ function buildErrosPage(container, goTo) {
   // tenha escrito à mão. Se não encontrar nada, o campo Produto continua
   // normalmente editável.
   function buildCnpAutoFillField(f) {
-    const control = h('input', { class: 'input', type: 'text', placeholder: f.placeholder || 'Ex: 1234567 (ou passa o leitor de código de barras)' });
+    const control = h('input', { class: 'input', type: 'text', id: 'erro-cnp-input', placeholder: f.placeholder || 'Ex: 1234567 (ou passa o leitor de código de barras)' });
     control.value = draft.cnp || '';
     let debounceTimer = null;
     let ultimoCnpConsultado = '';
@@ -8523,7 +8529,7 @@ function buildMapa48hPage(container, goTo) {
     draft = {
       nomeCliente: '', nFicha: '', nMapa: '', contacto: '',
       dataInicio: dataInicioSugerida, dataFim: mapa48hCalcularDataFim(dataInicioSugerida),
-      faturacao: 'Não', avisado: 'Não', estadoEntrega: 'Pendente', dataLeitura: '', observacoes: '',
+      faturacao: 'Não', avisado: 'Não', estadoEntrega: 'Pendente', emUso: false, dataLeitura: '', observacoes: '',
       ...prefill,
     };
     editingId = null; formError = ''; showForm = true; rerender();
@@ -8543,6 +8549,34 @@ function buildMapa48hPage(container, goTo) {
     const updated = await dbUpdate('mapa48h', r.id, { avisado: novo });
     if (updated) { STATE.mapa48h = STATE.mapa48h.map(x => x.id === r.id ? updated : x); rerender(); }
     else showDbErrorToast('Não foi possível atualizar o aviso');
+  }
+  // "Aparelho a Uso" é um controlo manual — nunca calculado sozinho pela
+  // data. Só liga quando a equipa clica a confirmar que entregou mesmo o
+  // aparelho ao utente nesse dia, e desliga da mesma forma.
+  // "Aparelho a Uso" é um controlo manual — nunca calculado sozinho pela
+  // data. Só liga quando a equipa clica a confirmar que entregou mesmo o
+  // aparelho ao utente nesse dia, e desliga da mesma forma. Limite: por
+  // omissão só 1 aparelho de cada vez; um 2º pede confirmação explícita
+  // (aparelho emprestado); um 3º é sempre bloqueado.
+  async function aplicarToggleEmUso(r, novo) {
+    const updated = await dbUpdate('mapa48h', r.id, { emUso: novo });
+    if (updated) { STATE.mapa48h = STATE.mapa48h.map(x => x.id === r.id ? updated : x); rerender(); }
+    else showDbErrorToast('Não foi possível atualizar o estado do aparelho');
+  }
+  async function toggleEmUso(r) {
+    const novo = !r.emUso;
+    if (novo) {
+      const outrosAtivos = STATE.mapa48h.filter(x => x.id !== r.id && x.emUso && x.estadoEntrega !== 'Já entregou').length;
+      if (outrosAtivos >= 2) {
+        confirmDialog('Limite atingido: já há 2 aparelhos do MAPA a ser utilizados em simultâneo. Não é possível ativar mais nenhum até um deles ser devolvido.', () => {}, { confirmLabel: 'Entendido' });
+        return;
+      }
+      if (outrosAtivos === 1) {
+        confirmDialog('Já existe 1 aparelho do MAPA a ser utilizado neste momento. Vão utilizar um segundo aparelho (emprestado)?', () => aplicarToggleEmUso(r, novo), { confirmLabel: 'Sim, usar 2.º aparelho' });
+        return;
+      }
+    }
+    await aplicarToggleEmUso(r, novo);
   }
 
   function checkMapa48hRequired(d) {
@@ -8600,7 +8634,7 @@ function buildMapa48hPage(container, goTo) {
   function marcarEntregue(id) {
     const registoAtual = STATE.mapa48h.find(r => r.id === id);
     confirmarConclusaoMapa48hDialog(async (vaiRepetir) => {
-      const updated = await dbUpdate('mapa48h', id, { estadoEntrega: 'Já entregou' });
+      const updated = await dbUpdate('mapa48h', id, { estadoEntrega: 'Já entregou', emUso: false });
       if (!updated) { showDbErrorToast('Não foi possível marcar como concluído'); return; }
       STATE.mapa48h = STATE.mapa48h.map(r => r.id === id ? updated : r);
       selectedIds = new Set([...selectedIds].filter(x => x !== id));
@@ -8656,7 +8690,7 @@ function buildMapa48hPage(container, goTo) {
     const thead = h('thead', {}, h('tr', {}, ['', 'Cliente', 'Nº Ficha', 'Data Início', 'Data Fim', 'Faturação', 'Avisado', 'Estado'].map(t => h('th', {}, t))));
     const rows = list.map(r => {
       const selected = selectedIds.has(r.id);
-      const aUso = activeTab === 'pendentes' && mapa48hAUso(r);
+      const aUso = activeTab === 'pendentes' && !!r.emUso;
       const rowClass = 'selectable-row' + (selected ? ' row-selected' : '') + (aUso ? ' row-em-uso' : '');
       const estadoCell = r.estadoEntrega === 'Já entregou'
         ? h('span', { class: 'badge badge-green' }, 'JÁ ENTREGOU')
@@ -8666,7 +8700,16 @@ function buildMapa48hPage(container, goTo) {
             pendenteBadge.addEventListener('click', (e) => { e.stopPropagation(); requireAuth(() => marcarEntregue(r.id)); });
             return pendenteBadge;
           })(),
-          aUso ? h('span', { class: 'badge-em-uso' }, [Icon('zap', { size: 11, strokeWidth: 2.4 }), ' Aparelho a Uso']) : null,
+          (() => {
+            // Controlo manual: só liga quando a equipa confirma que entregou
+            // mesmo o aparelho ao utente — nunca é automático pela data.
+            const emUsoBadge = h('span', {
+              class: (aUso ? 'badge-em-uso' : 'badge-em-uso-off') + ' estado-badge-clicavel',
+              title: aUso ? 'Aparelho entregue ao utente — clicar para desmarcar' : 'Clicar quando o aparelho for entregue ao utente',
+            }, [Icon('zap', { size: 11, strokeWidth: 2.4 }), aUso ? ' Aparelho a Uso' : ' Marcar Aparelho a Uso']);
+            emUsoBadge.addEventListener('click', (e) => { e.stopPropagation(); requireAuth(() => toggleEmUso(r)); });
+            return emUsoBadge;
+          })(),
         ]);
       const avisadoBtn = h('button', {
         class: 'aviso-tag aviso-toggle' + (r.avisado === 'Sim' ? ' aviso-ativo' : ' aviso-inativo'),
