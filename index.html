@@ -10472,11 +10472,15 @@ function buildLoadingScreen() {
 async function loadAllData() {
   const keys = Object.keys(TABLES);
   const results = await Promise.all(keys.map(k => dbFetchAll(k)));
-  keys.forEach((k, i) => { STATE[k] = results[i]; });
-  STATE.mensagemDia = await dbFetchMensagemDia();
+  // dbFetchAll() já devolve dados sanitizados (ver rowToRecord), mas volta a
+  // passar por sanitizarSupabase() mesmo aqui, no exato ponto em que entra
+  // no STATE — garante blindagem total, mesmo que algum dia uma função de
+  // leitura nova seja adicionada sem essa sanitização embutida.
+  keys.forEach((k, i) => { STATE[k] = sanitizarSupabase(results[i]); });
+  STATE.mensagemDia = sanitizarSupabase(await dbFetchMensagemDia());
   await dbCleanupOldChatMessages();
-  STATE.mensagensChat = await dbFetchChat();
-  STATE.documentosEmitidos = await dbFetchDocumentosEmitidos();
+  STATE.mensagensChat = sanitizarSupabase(await dbFetchChat());
+  STATE.documentosEmitidos = sanitizarSupabase(await dbFetchDocumentosEmitidos());
 }
 
 // Cancela automaticamente pedidos ativos há mais de 6 meses (exceto Resolvido/Cancelado)
@@ -10504,12 +10508,14 @@ function setupRealtime() {
   Object.keys(TABLES).forEach(listKey => {
     sb.channel('realtime-' + TABLES[listKey])
       .on('postgres_changes', { event: '*', schema: 'public', table: TABLES[listKey] }, async (payload) => {
-        STATE[listKey] = await dbFetchAll(listKey);
+        // Sanitização explícita, mesmo em cima do que dbFetchAll() já devolve
+        // limpo — o STATE nunca recebe diretamente o que vem do Realtime/rede.
+        STATE[listKey] = sanitizarSupabase(await dbFetchAll(listKey));
         // Notificação nativa de "Nova Entrega Pendente" — exclusiva da tabela
         // de Entregas e só quando é mesmo um registo novo (INSERT); a
         // verificação de perfil (só Estafeta) acontece dentro da função.
         if (listKey === 'entregas' && payload.eventType === 'INSERT' && payload.new) {
-          handleNovaEntregaPendente(rowToRecord(payload.new));
+          handleNovaEntregaPendente(sanitizarSupabase(rowToRecord(payload.new)));
         }
         render();
       })
@@ -10517,9 +10523,9 @@ function setupRealtime() {
   });
   sb.channel('realtime-mensagens_chat')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'mensagens_chat' }, async (payload) => {
-      STATE.mensagensChat = await dbFetchChat();
+      STATE.mensagensChat = sanitizarSupabase(await dbFetchChat());
       if (payload.eventType === 'INSERT' && payload.new) {
-        handleNovaMensagemChat(rowToRecord(payload.new));
+        handleNovaMensagemChat(sanitizarSupabase(rowToRecord(payload.new)));
       }
       render();
     })
