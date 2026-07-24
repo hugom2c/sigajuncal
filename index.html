@@ -1477,6 +1477,7 @@ const ervanariaSchema = [
   { name: 'pvp', label: 'PVP (€)', type: 'number', size: 'xs' },
   { name: 'produto', label: 'Produto', type: 'text', col: 2 },
   { name: 'estado', label: 'Estado', type: 'select', options: ESTADOS, size: 'sm' },
+  { name: 'rota', label: 'Rota', type: 'checkbox' },
   { name: 'aviso', label: 'Aviso ao cliente', type: 'checkbox' },
   { name: 'obs', label: 'Observações', type: 'textarea', col: 2, maxLength: 200 },
 ];
@@ -1578,7 +1579,12 @@ function orcamentoStatusLabel(draft, listKey) {
     return `Aprovado - €${isNaN(valor) ? '0.00' : valor.toFixed(2)}`;
   }
   const total = orcamentosSelecionados(draft, listKey);
-  if (total === 0) return 'A aguardar orçamentos';
+  // "A aguardar orçamentos"/"N/M recebidos" só fazem sentido para um
+  // registo que passou mesmo pelo fluxo de cotações: precisa de estar (ou
+  // ter estado) "Em Orçamento" E ter pelo menos uma farmácia/fornecedor
+  // marcado como pedido. Um Pedido Direto (nunca esteve em Orçamento, ou
+  // não tem nenhuma cotação pedida) mostra antes "Sem orçamento solicitado".
+  if (draft.estado !== 'Em Orçamento' || total === 0) return 'Sem orçamento solicitado';
   const n = orcamentosPreenchidos(draft, listKey);
   return `${n}/${total} recebidos`;
 }
@@ -1587,7 +1593,7 @@ function orcamentoStatusTone(draft, listKey) {
   const aprovado = parseInt(draft.orcamentoAprovado, 10);
   if (aprovado >= 1 && aprovado <= max) return 'green';
   const total = orcamentosSelecionados(draft, listKey);
-  if (total === 0) return 'gray';
+  if (draft.estado !== 'Em Orçamento' || total === 0) return 'gray';
   const n = orcamentosPreenchidos(draft, listKey);
   return n === 0 ? 'gray' : 'orange';
 }
@@ -1603,6 +1609,15 @@ function orcamentoStatusTone(draft, listKey) {
 //   PVP), e a Farmácia do topo fica bloqueada nesse valor.
 function resolveFornecedorOrcamentoState(listKey, draft, fornecedorManual) {
   if (!categoriaTemOrcamentos(listKey)) return { fornecedorBloqueado: false, orcamentosBloqueados: false };
+  // Enquanto o Estado for "Em Orçamento", a Farmácia/Fornecedor ainda não é
+  // conhecida — o campo fica sempre bloqueado e vazio, independentemente do
+  // progresso dos Orçamentos, até o Estado avançar (Pedido, Satisfeito,
+  // Resolvido ou Cancelado), altura em que a lógica normal abaixo volta a
+  // decidir se fica bloqueado (preenchido pelos Orçamentos) ou editável.
+  if (draft.estado === 'Em Orçamento') {
+    draft.fornecedor = '';
+    return { fornecedorBloqueado: true, orcamentosBloqueados: false, aDefinirViaOrcamento: true };
+  }
   const max = orcamentoMaxSlots(listKey);
   const aprovadoIdx = parseInt(draft.orcamentoAprovado, 10);
   if (aprovadoIdx >= 1 && aprovadoIdx <= max) return { fornecedorBloqueado: true, orcamentosBloqueados: false };
@@ -1627,10 +1642,10 @@ function resolveFornecedorOrcamentoState(listKey, draft, fornecedorManual) {
 // bloqueado (preenchido automaticamente pelos Orçamentos, ou vazio porque
 // há mais do que uma farmácia marcada). onManualChange(isManual) é chamado
 // sempre que o utilizador o edita diretamente (não bloqueado).
-function buildFornecedorTopField(fieldDef, draft, bloqueado, onManualChange) {
+function buildFornecedorTopField(fieldDef, draft, bloqueado, onManualChange, aDefinir) {
   const listId = 'dl-fornecedor-top-' + (__datalistCounter++);
   const dl = h('datalist', { id: listId }, (fieldDef.options || []).map(o => h('option', { value: o })));
-  const inp = h('input', { class: 'input', list: listId, placeholder: fieldDef.placeholder || 'Escrever ou escolher...', disabled: bloqueado ? 'disabled' : undefined });
+  const inp = h('input', { class: 'input', list: listId, placeholder: aDefinir ? 'A definir via Orçamento' : (fieldDef.placeholder || 'Escrever ou escolher...'), disabled: bloqueado ? 'disabled' : undefined });
   inp.value = draft[fieldDef.name] || '';
   inp.addEventListener('change', () => {
     draft[fieldDef.name] = inp.value;
@@ -1638,9 +1653,11 @@ function buildFornecedorTopField(fieldDef, draft, bloqueado, onManualChange) {
   });
   const kids = [h('label', {}, fieldDef.label), inp, dl];
   if (bloqueado) {
-    kids.push(h('p', { class: 'field-helper-text' }, draft[fieldDef.name]
-      ? 'Preenchido automaticamente pela Gestão de Orçamentos.'
-      : 'Bloqueado — há mais do que uma farmácia marcada nos Orçamentos.'));
+    kids.push(h('p', { class: 'field-helper-text' }, aDefinir
+      ? 'A farmácia/fornecedor só fica definida depois de aprovar um orçamento — enquanto o Estado for "Em Orçamento", este campo mantém-se bloqueado.'
+      : (draft[fieldDef.name]
+        ? 'Preenchido automaticamente pela Gestão de Orçamentos.'
+        : 'Bloqueado — há mais do que uma farmácia marcada nos Orçamentos.')));
   }
   return h('div', { class: 'field' + (fieldDef.col === 2 ? ' span2' : '') }, kids);
 }
@@ -4041,7 +4058,15 @@ function aplicarMudancaEstadoComRota(r, listKey, novoEstado, gravar) {
       gravar({ estado: novoEstado, rota: true });
     } else {
       confirmarRotaExcelDialog((sim) => {
-        gravar(sim ? { estado: novoEstado, rota: true } : { estado: novoEstado });
+        if (sim) {
+          gravar({ estado: novoEstado, rota: true });
+        } else {
+          gravar({ estado: novoEstado, rota: false });
+          confirmDialog(
+            'É obrigatório colocar primeiro o registo no ficheiro Excel das Rotas para poder ativar a Rota.',
+            () => {}, { confirmLabel: 'Entendido' }
+          );
+        }
       });
     }
     return;
@@ -4529,7 +4554,8 @@ function buildOrtopediaPage(container, goTo) {
     }
 
     const gridFields = camposBase.map(f => {
-      if (f.name === 'fornecedor') return buildFornecedorTopField(f, draft, estadoOrcamento.fornecedorBloqueado, (isManual) => { fornecedorEditadoManualmente = isManual; rerender(); });
+      if (f.name === 'fornecedor') return buildFornecedorTopField(f, draft, estadoOrcamento.fornecedorBloqueado, (isManual) => { fornecedorEditadoManualmente = isManual; rerender(); }, estadoOrcamento.aDefinirViaOrcamento);
+      if (f.name === 'estado') return buildField(Object.assign({}, f, { onChange: () => rerender() }), draft);
       if (f.name === 'produto') return buildField(Object.assign({}, f, { onChange: () => renderCondicional() }), draft);
       return buildField(f, draft);
     });
@@ -4643,8 +4669,17 @@ function buildCategoryPage(container, title, icon, subtitle, schema, listKey, go
         finalizarSubmit();
       } else {
         confirmarRotaExcelDialog((sim) => {
-          if (sim) draft.rota = true;
-          finalizarSubmit();
+          if (sim) {
+            draft.rota = true;
+            finalizarSubmit();
+          } else {
+            draft.rota = false;
+            finalizarSubmit();
+            confirmDialog(
+              'É obrigatório colocar primeiro o registo no ficheiro Excel das Rotas para poder ativar a Rota.',
+              () => {}, { confirmLabel: 'Entendido' }
+            );
+          }
         });
       }
       return;
@@ -4698,8 +4733,32 @@ function buildCategoryPage(container, title, icon, subtitle, schema, listKey, go
     if (showForm) {
       const estado = resolveFornecedorOrcamentoState(listKey, draft, fornecedorEditadoManualmente);
       const fieldOverrides = categoriaTemOrcamentos(listKey) ? {
-        fornecedor: (f) => buildFornecedorTopField(f, draft, estado.fornecedorBloqueado, (isManual) => { fornecedorEditadoManualmente = isManual; rerender(); }),
+        fornecedor: (f) => buildFornecedorTopField(f, draft, estado.fornecedorBloqueado, (isManual) => { fornecedorEditadoManualmente = isManual; rerender(); }, estado.aDefinirViaOrcamento),
+        estado: (f) => buildField(Object.assign({}, f, { onChange: () => rerender() }), draft),
       } : {};
+      // Tentar LIGAR a Rota manualmente (fora da transição de Estado) exige
+      // a mesma validação: Guarani confirma sozinha, as restantes pedem
+      // confirmação do Excel — responder "Não" bloqueia mesmo a ativação.
+      if (listKey === 'manipulados' || listKey === 'ervanaria') {
+        fieldOverrides.rota = (f) => buildField(Object.assign({}, f, {
+          onChange: () => {
+            if (!draft.rota) { rerender(); return; }
+            const ehGuarani = listKey === 'manipulados' && String(draft.fornecedor || '').trim().toLowerCase().includes('guarani');
+            if (ehGuarani) { rerender(); return; }
+            draft.rota = false;
+            rerender();
+            confirmarRotaExcelDialog((sim) => {
+              if (sim) { draft.rota = true; rerender(); }
+              else {
+                confirmDialog(
+                  'É obrigatório colocar primeiro o registo no ficheiro Excel das Rotas para poder ativar a Rota.',
+                  () => {}, { confirmLabel: 'Entendido' }
+                );
+              }
+            });
+          },
+        }), draft);
+      }
       wrap.appendChild(buildRecordForm(schema, draft, {
         editing: !!editingId, onSubmit: submit, onCancel: cancel, errorMessage: formError, saving, fieldOverrides,
       }));
