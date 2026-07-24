@@ -2017,7 +2017,9 @@ function agendaDiaTemMarcacaoAtiva(prestadorKey, dateISO) {
 // passados ficam só para consulta — nenhuma ação de escrita é permitida.
 function buildAgendaDiaModal(prestadorKey, dateISO, onSaved) {
   const overlay = h('div', { class: 'modal-overlay' });
-  function close() { overlay.remove(); }
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
   const prestador = PRESTADORES_AGENDA.find(p => p.key === prestadorKey);
@@ -4064,7 +4066,9 @@ function buildReadOnlyField(field, record) {
 
 function openViewOnlyModal(schema, record, title) {
   const overlay = h('div', { class: 'modal-overlay' });
-  function close() { overlay.remove(); }
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   const grid = h('div', { class: 'form-grid' }, schema.map(f => buildReadOnlyField(f, record)));
   const closeBtn = h('button', { class: 'btn btn-secondary', onclick: close }, 'Fechar');
@@ -4085,8 +4089,10 @@ function openRecordModal(listKey, schema, record, title, onSaved) {
   closePopover();
   const draft = Object.assign({}, record);
   const overlay = h('div', { class: 'modal-overlay' });
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  function close() { overlay.remove(); }
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
   const errorMsg = h('p', { class: 'form-error', style: 'display:none;' }, '');
   async function save() {
     const missing = checkRequiredFields(draft, schema);
@@ -4601,7 +4607,9 @@ function mensagemDiaAtiva() {
 function openMensagemDiaModal(onSaved, seedRecord) {
   const current = seedRecord || mensagemDiaAtiva();
   const overlay = h('div', { class: 'modal-overlay' });
-  function close() { overlay.remove(); }
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
   const textarea = h('textarea', { class: 'textarea', placeholder: 'Escreva o aviso ou mensagem do dia para a equipa...', rows: '4' });
@@ -6865,7 +6873,9 @@ function buildDiaEspecialModal(dateISO, evento, onSaved) {
 
 function buildEventoDiaModal(tipo, dateISO, evento, onSaved) {
   const overlay = h('div', { class: 'modal-overlay' });
-  function close() { overlay.remove(); }
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
   const tipoInfo = EVENTO_TIPOS.find(t => t.key === tipo);
@@ -12056,7 +12066,9 @@ function requireAuth(actionFn) {
 // real de cada campo vive só neste objeto de estado em memória.
 function showUserLoginScreen(onSuccess) {
   const overlay = h('div', { class: 'modal-overlay' });
-  function close() { overlay.remove(); }
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
   const credenciais = { usernameReal: '', pinReal: '' };
