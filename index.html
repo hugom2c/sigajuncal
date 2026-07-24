@@ -6264,8 +6264,10 @@ function buildLembretesPage(container, goTo, embedded) {
     if (selectedIds.size === 0) return;
     const ids = [...selectedIds];
     const plural = ids.length > 1;
+    // Lembretes são pessoais — eliminar é sempre definitivo (hard delete),
+    // nunca passa pelo Lixo partilhado da equipa.
     confirmDialog(`ATENÇÃO: Tem a certeza de que quer eliminar permanentemente ${ids.length} registo${plural ? 's' : ''} selecionado${plural ? 's' : ''}? Esta ação não pode ser desfeita!`, async () => {
-      const apagados = await bulkSoftDelete('lembretes', ids);
+      const apagados = await bulkHardDelete('lembretes', ids);
       STATE.lembretes = STATE.lembretes.filter(r => !apagados.has(r.id));
       selectedIds = new Set([...selectedIds].filter(id => !apagados.has(id)));
       showForm = false; rerender();
@@ -11116,7 +11118,6 @@ const LIXO_SOURCES = [
   { key: 'outros', schema: outrosSchema, categoria: 'Outros Fornecedores', icon: 'package', itemField: 'produto' },
   { key: 'veterinaria', schema: veterinariaSchema, categoria: 'Veterinária', icon: 'paw', itemField: 'produto' },
   { key: 'erros', schema: errosSchema, categoria: 'Erros de Stock', icon: 'alert', itemField: 'produto' },
-  { key: 'lembretes', schema: lembretesSchema, categoria: 'Lembretes', icon: 'bell', itemField: 'info' },
   { key: 'reclamacoes', schema: reclamacoesSchema, categoria: 'Reclamações', icon: 'bookOpen', itemField: 'produto' },
   { key: 'eventos', schema: [], categoria: 'Eventos', icon: 'star', itemField: 'label' },
   { key: 'orcamentos', schema: orcamentosSchema, categoria: 'Orçamentos Conhecidos', icon: 'flask', itemField: 'dosagemCapsulas' },
@@ -11128,6 +11129,31 @@ const LIXO_SOURCES = [
   { key: 'desafios', schema: desafiosSchema, categoria: 'Prémios', icon: 'award', itemField: 'tituloDesafio' },
   { key: 'objetivos', schema: objetivosSchema, categoria: 'Objetivos', icon: 'target', itemField: 'titulo' },
 ];
+
+const LIXO_RETENCAO_DIAS = 180; // 6 meses
+// Limpeza automática e silenciosa do Lixo: apaga em definitivo (hard
+// delete) qualquer registo eliminado há mais de 6 meses, em todas as
+// categorias. Corre em segundo plano — sem toasts, sem popups, sem
+// interromper o que a pessoa está a fazer — só mantém a tabela do Lixo
+// sempre pequena e rápida de carregar. Nunca lança exceções: uma falha
+// numa categoria não impede a limpeza das restantes.
+async function purgarLixoAntigo() {
+  const limite = new Date();
+  limite.setDate(limite.getDate() - LIXO_RETENCAO_DIAS);
+  await Promise.all(LIXO_SOURCES.map(async (src) => {
+    try {
+      const eliminados = await dbFetchDeleted(src.key);
+      const antigos = eliminados.filter(r => r.dataEliminacao && new Date(r.dataEliminacao) < limite);
+      if (!antigos.length) return;
+      await Promise.all(antigos.map(r => dbPermanentDelete(src.key, r.id)));
+    } catch (e) {
+      // Falha silenciosa de propósito — a limpeza automática nunca deve
+      // incomodar quem está a usar a app; tenta-se outra vez no próximo
+      // arranque ou na próxima visita ao Lixo.
+      console.error(`[Lixo] falha ao purgar registos antigos de ${src.key}:`, formatarErroSeguro(e));
+    }
+  }));
+}
 
 function buildLixoPage(container, goTo) {
   let loading = true;
@@ -11143,6 +11169,9 @@ function buildLixoPage(container, goTo) {
   }
 
   async function loadDeleted() {
+    // Limpeza silenciosa antes de mostrar a lista, para o Lixo nunca exibir
+    // registos que já deviam ter sido apagados em definitivo (>6 meses).
+    await purgarLixoAntigo();
     const results = await Promise.all(LIXO_SOURCES.map(src => dbFetchDeleted(src.key)));
     const combined = [];
     LIXO_SOURCES.forEach((src, i) => {
@@ -12114,6 +12143,9 @@ async function startApp() {
   await loadAllData();
   await autoCancelOldOrders();
   loadingEl.remove();
+  // Limpeza automática do Lixo (>6 meses) — corre em segundo plano, nunca
+  // bloqueia o arranque nem o primeiro ecrã.
+  purgarLixoAntigo();
   // Sessão persistente (só Estafeta / Farmácia Boa Nova) — se houver uma
   // guardada e ainda válida, a app arranca já autenticada, sem pedir PIN.
   restaurarSessaoPersistente();
