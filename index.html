@@ -3997,6 +3997,65 @@ function confirmarReverterAviso(onConfirmarReverter) {
     { confirmLabel: 'Sim, Reverter' }
   );
 }
+// Pergunta Sim/Não usada ao mudar o Estado para "Pedido" em Manipulados
+// (farmácias que não a Guarani) e em Ervanária — confirma se o ficheiro
+// Excel partilhado das Rotas já foi atualizado antes de marcar a Rota como
+// feita. onResposta recebe true (Sim) ou false (Não); em qualquer dos
+// casos a mudança de Estado segue sempre em frente, só a Rota é que muda.
+function confirmarRotaExcelDialog(onResposta) {
+  const overlay = h('div', { class: 'modal-overlay' });
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
+  const simBtn = h('button', { class: 'btn btn-primary', onclick: () => { close(); onResposta(true); } }, 'Sim');
+  const naoBtn = h('button', { class: 'btn btn-secondary', onclick: () => { close(); onResposta(false); } }, 'Não');
+  const panel = h('div', { class: 'modal-panel confirm-panel' }, [
+    h('p', { class: 'confirm-message' }, 'Já foi colocado no ficheiro Excel das Rotas?'),
+    h('div', { class: 'form-actions' }, [simBtn, naoBtn]),
+  ]);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
+// Aviso de balcão (não bloqueia nada) ao passar de "Pedido" para
+// "Satisfeito" num registo que tinha a Rota ativa — só um lembrete visual.
+function lembrarAtualizarExcelRotas() {
+  confirmDialog(
+    'Lembrete: Atualiza o ficheiro Excel das Rotas para "Entregue" na Farmácia.',
+    () => {},
+    { confirmLabel: 'Entendido' }
+  );
+}
+// Decide o valor da Rota ao mudar o Estado para "Pedido", consoante a
+// farmácia/módulo, e só depois grava tudo de uma vez (Estado + Rota).
+// - Manipulados + Farmácia Guarani: Rota confirma-se sozinha (entrega
+//   garantida via Alliance Healthcare), sem perguntar nada.
+// - Manipulados (restantes farmácias) e Ervanária: pergunta sempre se o
+//   Excel das Rotas já foi atualizado.
+// - Todos os outros módulos: comportamento inalterado, sem lógica de Rota.
+function aplicarMudancaEstadoComRota(r, listKey, novoEstado, gravar) {
+  const relevante = listKey === 'manipulados' || listKey === 'ervanaria';
+  if (relevante && novoEstado === 'Pedido' && r.estado !== 'Pedido') {
+    const ehGuarani = listKey === 'manipulados' && String(r.fornecedor || '').trim().toLowerCase().includes('guarani');
+    if (ehGuarani) {
+      gravar({ estado: novoEstado, rota: true });
+    } else {
+      confirmarRotaExcelDialog((sim) => {
+        gravar(sim ? { estado: novoEstado, rota: true } : { estado: novoEstado });
+      });
+    }
+    return;
+  }
+  if (relevante && novoEstado === 'Satisfeito' && r.estado === 'Pedido' && r.rota) {
+    gravar({ estado: novoEstado });
+    // Farmácia Guarani: entrega feita pela Alliance Healthcare, não usa o
+    // Excel online de rotas — o lembrete não se aplica a ela.
+    const ehGuarani = listKey === 'manipulados' && String(r.fornecedor || '').trim().toLowerCase().includes('guarani');
+    if (!ehGuarani) lembrarAtualizarExcelRotas();
+    return;
+  }
+  gravar({ estado: novoEstado });
+}
 // Popup de 3 opções — usado especificamente ao marcar uma entrega "A
 // Cobrar" como Entregue, para nunca perder de vista dinheiro/pagamento por
 // cobrar só porque a entrega já foi feita. onEscolhaPago é chamado com
@@ -4198,8 +4257,8 @@ function buildRecordTable(schema, records, selectedIds, onToggleSelect, listKey,
       sel.addEventListener('click', (e) => e.stopPropagation());
       sel.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sel.blur(); } });
       sel.addEventListener('blur', () => {
-        if (sel.value !== r.estado) requireAuth(() => gravarCampo(r, { estado: sel.value }));
-        else mostrarBadge();
+        if (sel.value === r.estado) { mostrarBadge(); return; }
+        requireAuth(() => aplicarMudancaEstadoComRota(r, listKey, sel.value, (patch) => gravarCampo(r, patch)));
       });
       td.appendChild(sel);
       setTimeout(() => sel.focus(), 0);
@@ -4527,6 +4586,11 @@ function buildCategoryPage(container, title, icon, subtitle, schema, listKey, go
   // Farmácia/Orçamentos: true assim que o utilizador escreve diretamente no
   // campo "Farmácia" do topo — nesse caso os Orçamentos ficam bloqueados.
   let fornecedorEditadoManualmente = false;
+  // Guarda o Estado com que o registo estava ANTES desta edição — é
+  // comparando com este valor que se deteta a transição para "Pedido" ou
+  // de "Pedido" para "Satisfeito" (a lógica da Rota, em Manipulados e
+  // Ervanária, só reage a mudanças reais de estado).
+  let estadoOriginal = null;
 
   function records() { return STATE[listKey]; }
 
@@ -4539,13 +4603,14 @@ function buildCategoryPage(container, title, icon, subtitle, schema, listKey, go
     rerender();
   }
 
-  function openNew() { draft = emptyRecord(schema); editingId = null; formError = ''; fornecedorEditadoManualmente = false; showForm = true; rerender(); }
+  function openNew() { draft = emptyRecord(schema); editingId = null; formError = ''; fornecedorEditadoManualmente = false; estadoOriginal = null; showForm = true; rerender(); }
   function openEditSelected() {
     if (selectedIds.size !== 1) return;
     const id = [...selectedIds][0];
     const r = records().find(x => x.id === id);
     if (!r) return;
     draft = Object.assign({}, r); editingId = r.id; formError = '';
+    estadoOriginal = r.estado;
     // Regista de novo (registo já existente): se não há farmácias marcadas
     // como "Pedido" nos Orçamentos mas há Fornecedor preenchido, assume-se
     // que foi um Pedido Direto — caso contrário, deixa os Orçamentos mandar.
@@ -4565,6 +4630,36 @@ function buildCategoryPage(container, title, icon, subtitle, schema, listKey, go
     const formatoInvalido = checkFieldFormats(draft, schema);
     if (formatoInvalido) { formError = formatoInvalido; rerender(); return; }
     formError = '';
+
+    // Automação/confirmação da Rota ao transitar o Estado para "Pedido" —
+    // só em Manipulados e Ervanária, e só quando o Estado realmente muda
+    // (nunca ao simplesmente reabrir um registo que já estava em "Pedido").
+    const relevante = listKey === 'manipulados' || listKey === 'ervanaria';
+    if (relevante && draft.estado === 'Pedido' && estadoOriginal !== 'Pedido') {
+      const ehGuarani = listKey === 'manipulados' && String(draft.fornecedor || '').trim().toLowerCase().includes('guarani');
+      if (ehGuarani) {
+        // Farmácia Guarani: entrega garantida via Alliance Healthcare — Rota confirma-se sozinha.
+        draft.rota = true;
+        finalizarSubmit();
+      } else {
+        confirmarRotaExcelDialog((sim) => {
+          if (sim) draft.rota = true;
+          finalizarSubmit();
+        });
+      }
+      return;
+    }
+    finalizarSubmit();
+  }
+
+  async function finalizarSubmit() {
+    // Se o Estado passa de "Pedido" para "Satisfeito" num registo com Rota
+    // ativa, o lembrete aparece só DEPOIS de gravar com sucesso — nunca
+    // atrasa nem bloqueia a gravação em si. Exceção: Farmácia Guarani, cuja
+    // entrega é feita pela Alliance Healthcare e não usa o Excel de rotas.
+    const ehGuarani = listKey === 'manipulados' && String(draft.fornecedor || '').trim().toLowerCase().includes('guarani');
+    const avisarExcelRotas = (listKey === 'manipulados' || listKey === 'ervanaria')
+      && draft.estado === 'Satisfeito' && estadoOriginal === 'Pedido' && !!draft.rota && !ehGuarani;
     draft.responsavel = currentUserName();
     normalizeNameFields(draft);
     saving = true; rerender();
@@ -4578,7 +4673,10 @@ function buildCategoryPage(container, title, icon, subtitle, schema, listKey, go
       else formError = `Não foi possível adicionar o registo. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
     }
     saving = false;
-    if (!formError) showForm = false;
+    if (!formError) {
+      showForm = false;
+      if (avisarExcelRotas) lembrarAtualizarExcelRotas();
+    }
     rerender();
   }
   function cancel() { formError = ''; showForm = false; rerender(); }
@@ -12277,7 +12375,7 @@ function buildSidebarBadgeSlotContent() {
    - Todos os restantes perfis (Básico, Administrador, etc.): mantêm o
      limite padrão, mais curto, por estarem sempre junto ao posto de
      trabalho no balcão. */
-const INACTIVITY_LIMIT_MS = 30000;
+const INACTIVITY_LIMIT_MS = 60000; // 1 minuto
 const INACTIVITY_LIMIT_PRESTADOR_MS = 60 * 60 * 1000; // 1 hora (3600s) — só Prestador de Serviço
 let inactivityTimer = null;
 function resetInactivityTimer() {
