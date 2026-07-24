@@ -5017,8 +5017,10 @@ function buildLembretesBellHome() {
 function abrirModalLembretesUrgentes() {
   const { urgentes } = contarLembretesPendentesDoUtilizador();
   const overlay = h('div', { class: 'modal-overlay' });
-  function close() { overlay.remove(); }
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
   const linhas = urgentes.length ? urgentes.map(r => {
     const concluirBtn = h('button', { class: 'btn btn-primary', style: 'padding:6px 12px;font-size:12px;flex-shrink:0;' }, 'Concluir');
     concluirBtn.addEventListener('click', async () => {
