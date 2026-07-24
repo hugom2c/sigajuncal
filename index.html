@@ -987,6 +987,8 @@
     border:1px solid var(--pharm-200);background:#fff;color:var(--pharm-600);cursor:pointer;
     display:flex;align-items:center;justify-content:center;transition:background-color .15s ease,transform .15s ease;}
   .lembretes-bell-btn:hover{background:var(--pharm-50);transform:scale(1.05);}
+  .lembretes-bell-inativa{opacity:.45;border-color:var(--pharm-100);color:var(--pharm-400);}
+  .lembretes-bell-inativa:hover{opacity:.75;}
   .lembretes-bell-badge{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;
     border-radius:999px;background:var(--pharm-500);color:#fff;font-size:10px;font-weight:800;
     display:flex;align-items:center;justify-content:center;line-height:1;}
@@ -1750,7 +1752,7 @@ const errosSchema = [
 // Lembretes: a Data de criação é automática (não faz parte do formulário)
 const lembretesSchema = [
   { name: 'info', label: 'Informação / Tarefa', type: 'textarea', col: 2, maxLength: 200 },
-  { name: 'data', label: 'Data do Lembrete', type: 'date', size: 'xs' },
+  { name: 'data', label: 'Alerta para (Data)', type: 'date', size: 'xs' },
 ];
 
 // Reclamações: produtos devolvidos/reclamados por clientes ao balcão
@@ -3495,6 +3497,14 @@ function formatDate(d) {
   if (parts.length !== 3) return d;
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
+// Extrai só a parte da data (sem hora) de um timestamp ISO completo — usado
+// para mostrar "Criado em" a partir de created_at, que vem sempre com hora.
+function formatDateOnlyFromISO(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
 
 /* ---- Formatação de nomes (Title Case, respeitando preposições PT) ---- */
 const PT_LOWERCASE_WORDS = new Set(['de', 'do', 'da', 'dos', 'das', 'e']);
@@ -4983,16 +4993,22 @@ function contarLembretesPendentesDoUtilizador() {
 function buildLembretesBellHome() {
   if (!activeUser) return null;
   const { total, urgentes } = contarLembretesPendentesDoUtilizador();
-  if (total === 0) return null;
+  const inativa = total === 0;
   const btn = h('button', {
-    class: 'lembretes-bell-btn' + (urgentes.length ? ' lembretes-bell-piscar' : ''),
-    title: urgentes.length ? `${urgentes.length} lembrete(s) urgente(s)!` : `${total} lembrete(s) pendente(s)`,
-    'aria-label': 'Lembretes pendentes',
+    class: 'lembretes-bell-btn' + (inativa ? ' lembretes-bell-inativa' : '') + (urgentes.length ? ' lembretes-bell-piscar' : ''),
+    title: urgentes.length ? `${urgentes.length} lembrete(s) urgente(s)!` : (inativa ? 'Os teus Lembretes' : `${total} lembrete(s) pendente(s)`),
+    'aria-label': 'Lembretes pessoais',
   }, [
     Icon('bell', { size: 18, strokeWidth: 2.2 }),
-    h('span', { class: 'lembretes-bell-badge' }, String(total)),
+    inativa ? null : h('span', { class: 'lembretes-bell-badge' }, String(total)),
   ]);
-  btn.addEventListener('click', () => abrirModalLembretesUrgentes());
+  // Sem nada pendente, a campainha funciona como atalho direto para a
+  // área de Lembretes; havendo pendentes, abre logo o popup dos urgentes
+  // (ou, se nenhum for urgente ainda, também serve de atalho ao módulo).
+  btn.addEventListener('click', () => {
+    if (total > 0 && urgentes.length > 0) abrirModalLembretesUrgentes();
+    else { STATE.navFrom = STATE.page; STATE.page = 'lembretes'; STATE.sidebarOpen = false; render(); }
+  });
   return btn;
 }
 // Popup rápido dos lembretes urgentes — cada um com um botão para "Concluir
@@ -5013,7 +5029,7 @@ function abrirModalLembretesUrgentes() {
     return h('div', { class: 'lembrete-urgente-row' }, [
       h('div', { style: 'flex:1;min-width:0;' }, [
         h('p', { class: 'cell-strong', style: 'margin:0 0 2px;' }, r.info || '—'),
-        h('p', { class: 'cell-muted', style: 'margin:0;font-size:11.5px;' }, `Data: ${formatDate(r.data)}`),
+        h('p', { class: 'cell-muted', style: 'margin:0;font-size:11.5px;' }, `Criado em: ${formatDateOnlyFromISO(r.createdAt)} · Alerta para: ${formatDate(r.data)}`),
       ]),
       concluirBtn,
     ]);
@@ -6303,7 +6319,7 @@ function buildLembretesPage(container, goTo, embedded) {
         : (mode === 'resolved' ? 'Ainda não há lembretes concluídos.' : 'Sem lembretes pendentes. Tudo em dia!');
       return EmptyState(msg);
     }
-    const thead = h('thead', {}, h('tr', {}, ['', 'Data', 'Responsável', 'Informação / Tarefa', 'Estado'].map(t => h('th', {}, t))));
+    const thead = h('thead', {}, h('tr', {}, ['', 'Criado em', 'Alerta para', 'Responsável', 'Informação / Tarefa', 'Estado'].map(t => h('th', {}, t))));
     const tbody = h('tbody', {}, list.map(r => {
       const pendente = mode !== 'resolved';
       let estadoBadge;
@@ -6316,6 +6332,7 @@ function buildLembretesPage(container, goTo, embedded) {
       const selected = selectedIds.has(r.id);
       const row = h('tr', { class: 'selectable-row' + (pendente ? '' : ' row-resolved') + (selected ? ' row-selected' : '') }, [
         buildSelectionCheckbox(r.id, selectedIds, toggleSelect),
+        h('td', { class: 'cell-muted' }, formatDateOnlyFromISO(r.createdAt)),
         h('td', {}, formatDate(r.data)),
         h('td', { class: 'cell-strong' }, r.responsavel || '—'),
         h('td', { style: 'white-space:normal;max-width:460px;' }, r.info || '—'),
