@@ -982,6 +982,22 @@
 
   .welcome-eyebrow{color:var(--pharm-500);font-size:13.5px;font-weight:600;}
   .welcome-title{font-size:27px;font-weight:800;color:var(--pharm-900);margin-top:5px;letter-spacing:-.01em;}
+  /* Sino de Lembretes pessoais junto à saudação da Home */
+  .lembretes-bell-btn{position:relative;flex-shrink:0;width:38px;height:38px;border-radius:50%;
+    border:1px solid var(--pharm-200);background:#fff;color:var(--pharm-600);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:background-color .15s ease,transform .15s ease;}
+  .lembretes-bell-btn:hover{background:var(--pharm-50);transform:scale(1.05);}
+  .lembretes-bell-badge{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;
+    border-radius:999px;background:var(--pharm-500);color:#fff;font-size:10px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;line-height:1;}
+  .lembretes-bell-piscar{border-color:var(--red);color:var(--red);animation:lembretesBellPulse 1.1s ease-in-out infinite;}
+  .lembretes-bell-piscar .lembretes-bell-badge{background:var(--red);}
+  @keyframes lembretesBellPulse{
+    0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.55);}
+    50%{box-shadow:0 0 0 7px rgba(220,38,38,0);}
+  }
+  .lembrete-urgente-row{display:flex;align-items:center;gap:10px;background:var(--red-bg);
+    border:1px solid var(--red-bd);border-radius:10px;padding:10px 12px;}
   .welcome-sub{font-size:13.5px;color:var(--pharm-500);margin-top:5px;}
 
   /* Search bar */
@@ -1733,7 +1749,8 @@ const errosSchema = [
 
 // Lembretes: a Data de criação é automática (não faz parte do formulário)
 const lembretesSchema = [
-  { name: 'info', label: 'Informação / Tarefa', type: 'textarea', col: 2 },
+  { name: 'info', label: 'Informação / Tarefa', type: 'textarea', col: 2, maxLength: 200 },
+  { name: 'data', label: 'Data do Lembrete', type: 'date', size: 'xs' },
 ];
 
 // Reclamações: produtos devolvidos/reclamados por clientes ao balcão
@@ -4947,6 +4964,70 @@ function buildChatPage(container, goTo) {
   scrollToBottom();
 }
 
+// Lembretes pessoais do utilizador com sessão ativa — conta os pendentes e
+// separa os urgentes (data de hoje ou já ultrapassada, ainda não
+// concluídos), para o sino de notificação da Página Inicial.
+function contarLembretesPendentesDoUtilizador() {
+  if (!activeUser) return { total: 0, urgentes: [] };
+  const hoje = todayISO();
+  const meus = STATE.lembretes.filter(r => (r.userId !== null && r.userId !== undefined)
+    ? String(r.userId) === String(activeUser.id)
+    : r.responsavel === (activeUser.nomeCompleto || activeUser.username));
+  const pendentes = meus.filter(r => r.estado !== 'Concluído');
+  const urgentes = pendentes.filter(r => r.data && r.data <= hoje);
+  return { total: pendentes.length, urgentes };
+}
+// Sino de notificação junto à saudação da Home — badge com a contagem total
+// de pendentes; fica A PISCAR (classe .lembretes-bell-piscar) só quando há
+// pelo menos um urgente (data de hoje ou ultrapassada).
+function buildLembretesBellHome() {
+  if (!activeUser) return null;
+  const { total, urgentes } = contarLembretesPendentesDoUtilizador();
+  if (total === 0) return null;
+  const btn = h('button', {
+    class: 'lembretes-bell-btn' + (urgentes.length ? ' lembretes-bell-piscar' : ''),
+    title: urgentes.length ? `${urgentes.length} lembrete(s) urgente(s)!` : `${total} lembrete(s) pendente(s)`,
+    'aria-label': 'Lembretes pendentes',
+  }, [
+    Icon('bell', { size: 18, strokeWidth: 2.2 }),
+    h('span', { class: 'lembretes-bell-badge' }, String(total)),
+  ]);
+  btn.addEventListener('click', () => abrirModalLembretesUrgentes());
+  return btn;
+}
+// Popup rápido dos lembretes urgentes — cada um com um botão para "Concluir
+// / Dar por resolvido", que atualiza logo o estado e faz o sino parar de
+// piscar assim que não sobrar nenhum urgente.
+function abrirModalLembretesUrgentes() {
+  const { urgentes } = contarLembretesPendentesDoUtilizador();
+  const overlay = h('div', { class: 'modal-overlay' });
+  function close() { overlay.remove(); }
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  const linhas = urgentes.length ? urgentes.map(r => {
+    const concluirBtn = h('button', { class: 'btn btn-primary', style: 'padding:6px 12px;font-size:12px;flex-shrink:0;' }, 'Concluir');
+    concluirBtn.addEventListener('click', async () => {
+      const updated = await dbUpdate('lembretes', r.id, { estado: 'Concluído' });
+      if (updated) { STATE.lembretes = STATE.lembretes.map(x => x.id === r.id ? updated : x); close(); render(); }
+      else showDbErrorToast('Não foi possível concluir o lembrete');
+    });
+    return h('div', { class: 'lembrete-urgente-row' }, [
+      h('div', { style: 'flex:1;min-width:0;' }, [
+        h('p', { class: 'cell-strong', style: 'margin:0 0 2px;' }, r.info || '—'),
+        h('p', { class: 'cell-muted', style: 'margin:0;font-size:11.5px;' }, `Data: ${formatDate(r.data)}`),
+      ]),
+      concluirBtn,
+    ]);
+  }) : [h('p', { class: 'cell-muted' }, 'Sem lembretes urgentes por agora.')];
+  const verTodosBtn = h('button', { class: 'btn btn-secondary', onclick: () => { close(); STATE.navFrom = STATE.page; STATE.page = 'lembretes'; STATE.sidebarOpen = false; render(); } }, 'Ver Todos os Lembretes');
+  const closeBtn = h('button', { class: 'btn btn-secondary', onclick: close }, 'Fechar');
+  const panel = h('div', { class: 'modal-panel confirm-panel' }, [
+    h('p', { class: 'modal-title', style: 'margin-bottom:12px;' }, '🔔 Lembretes Urgentes'),
+    h('div', { style: 'display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;' }, linhas),
+    h('div', { class: 'form-actions', style: 'margin-top:14px;' }, [verTodosBtn, closeBtn]),
+  ]);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
 function buildHomepage(container, goTo) {
   clear(container);
 
@@ -5014,10 +5095,14 @@ function buildHomepage(container, goTo) {
   const wrap = h('div', { class: 'animate-in' });
 
   const presencaBadgeHome = buildUtilizadoresOnlineBadge();
+  const lembretesBell = buildLembretesBellHome();
   wrap.appendChild(h('div', { style: 'margin-bottom:18px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;' }, [
     h('div', {}, [
-      h('h2', { class: 'welcome-title' }, activeUser ? saudacaoPersonalizada(activeUser.nomeCompleto || activeUser.username) : 'Painel de Controlo'),
-      h('p', { class: 'welcome-sub' }, 'O painel centralizado para a gestão de pedidos, erros de stock e lembretes da Farmácia Juncal.'),
+      h('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
+        h('h2', { class: 'welcome-title', style: 'margin:0;' }, activeUser ? saudacaoPersonalizada(activeUser.nomeCompleto || activeUser.username) : 'Painel de Controlo'),
+        lembretesBell,
+      ]),
+      h('p', { class: 'welcome-sub' }, 'O teu espaço central de trabalho e gestão na Farmácia Juncal.'),
     ]),
     presencaBadgeHome,
   ]));
@@ -5154,7 +5239,7 @@ function buildErrosPage(container, goTo) {
   // tenha escrito à mão. Se não encontrar nada, o campo Produto continua
   // normalmente editável.
   function buildCnpAutoFillField(f) {
-    const control = h('input', { class: 'input', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', id: 'erro-cnp-input', placeholder: f.placeholder || 'Ex: 1234567 (ou passa o leitor de código de barras)' });
+    const control = h('input', { class: 'input', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', id: 'erro-cnp-input', placeholder: f.placeholder || 'CNP ou passa o leitor...' });
     control.value = draft.cnp || '';
     let debounceTimer = null;
     let ultimoCnpConsultado = '';
@@ -5505,7 +5590,7 @@ function buildValidadesPage(container, goTo) {
   }
 
   function buildCnpAutoFillField() {
-    const control = h('input', { class: 'input', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', id: 'validade-cnp-input', placeholder: 'Ex: 1234567 (ou passa o leitor de código de barras)' });
+    const control = h('input', { class: 'input', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', id: 'validade-cnp-input', placeholder: 'CNP ou passa o leitor...' });
     control.value = draft.cnp || '';
     let debounceTimer = null;
     let ultimoCnpConsultado = '';
@@ -6146,7 +6231,11 @@ function buildLembretesPage(container, goTo, embedded) {
       if (updated) STATE.lembretes = STATE.lembretes.map(r => r.id === editingId ? updated : r);
       else formError = `Não foi possível guardar as alterações. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
     } else {
-      const created = await dbInsert('lembretes', Object.assign({ data: todayISO(), estado: 'Pendente' }, draft));
+      // Lembretes passam a ser pessoais — cada registo fica associado ao ID
+      // de quem o criou, para só aparecer para essa pessoa.
+      const payload = Object.assign({ data: todayISO(), estado: 'Pendente', userId: activeUser ? activeUser.id : null }, draft);
+      if (!draft.data) payload.data = todayISO();
+      const created = await dbInsert('lembretes', payload);
       if (created) STATE.lembretes = [created, ...STATE.lembretes];
       else formError = `Não foi possível adicionar o lembrete. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
     }
@@ -6193,6 +6282,15 @@ function buildLembretesPage(container, goTo, embedded) {
   function visibleLembretes() {
     const q = searchQuery.trim().toLowerCase();
     let list = STATE.lembretes;
+    // Lembretes pessoais: só os do próprio utilizador. Registos antigos,
+    // criados antes desta reformulação (sem userId gravado), continuam a
+    // aparecer para quem os criou, comparando pelo nome guardado em
+    // "responsavel" — para não fazer desaparecer lembretes já existentes.
+    if (activeUser) {
+      list = list.filter(r => (r.userId !== null && r.userId !== undefined)
+        ? String(r.userId) === String(activeUser.id)
+        : r.responsavel === (activeUser.nomeCompleto || activeUser.username));
+    }
     if (q) list = list.filter(r => [r.responsavel, r.info].some(v => (v || '').toLowerCase().includes(q)));
     list = activeTab === 'resolved' ? list.filter(r => r.estado === 'Concluído') : list.filter(r => r.estado !== 'Concluído');
     return list.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));
@@ -7715,7 +7813,7 @@ function buildObjetivosPage(container, goTo, embedded) {
       // Produto preenche-se sozinho a partir do dicionário global (mesmo
       // mecanismo já usado em Validades e Erros de Stock), continuando
       // sempre editável para ajustes manuais.
-      const cnpInput = h('input', { class: 'input doc-item-cnp', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', placeholder: 'CNP / EAN / Código' });
+      const cnpInput = h('input', { class: 'input doc-item-cnp', type: 'text', inputmode: 'numeric', pattern: '[0-9]*', placeholder: 'CNP ou passa o leitor...' });
       cnpInput.value = p.cnp || '';
       let cnpDebounce = null;
       let ultimoCnpConsultado = '';
