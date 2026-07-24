@@ -6328,10 +6328,18 @@ function buildLembretesPage(container, goTo, embedded) {
 
   function build() {
     const wrap = h('div', { class: 'animate-in' });
-    const pendingCount = STATE.lembretes.filter(r => r.estado !== 'Concluído').length;
-    const resolvedCount = STATE.lembretes.filter(r => r.estado === 'Concluído').length;
+    // Contagens sempre calculadas só sobre os lembretes do próprio
+    // utilizador (mesmo critério de visibleLembretes) — para nunca mostrar
+    // números que incluam lembretes de outros colegas.
+    const meusLembretes = activeUser
+      ? STATE.lembretes.filter(r => (r.userId !== null && r.userId !== undefined)
+        ? String(r.userId) === String(activeUser.id)
+        : r.responsavel === (activeUser.nomeCompleto || activeUser.username))
+      : STATE.lembretes;
+    const pendingCount = meusLembretes.filter(r => r.estado !== 'Concluído').length;
+    const resolvedCount = meusLembretes.filter(r => r.estado === 'Concluído').length;
     if (!embedded) {
-      wrap.appendChild(withBackButton(buildPageHeader('bell', 'Lembretes', 'Avisos e pendências da equipa.', STATE.lembretes.length), goTo));
+      wrap.appendChild(withBackButton(buildPageHeader('bell', 'Lembretes', 'A tua lista pessoal de lembretes e notas de trabalho.', meusLembretes.length), goTo));
     }
 
     if (showForm) {
