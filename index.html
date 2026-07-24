@@ -4259,16 +4259,68 @@ function buildPageHeader(icon, title, subtitle, count, actionsEl) {
   const left = h('div', {}, [eyebrow, h('h2', { class: 'page-title' }, title), (typeof count === 'number' && subtitle) ? h('p', { class: 'page-subtitle' }, subtitle) : null]);
   return h('div', { class: 'page-header' }, [left, actionsEl || h('div')]);
 }
+// Mapa estático da hierarquia de navegação — cada página aponta sempre
+// para o seu "pai" fixo, independentemente de por onde a pessoa passou
+// para lá chegar. Isto substitui a navegação por histórico (STATE.navFrom,
+// que dependia do caminho percorrido e podia criar voltas estranhas ou
+// loops) por uma estrutura previsível e sempre igual, refletindo o
+// desenho real dos menus (NAV_SECTIONS/SECTOR_HUBS).
+const PAGINA_PAI = {
+  // Pedidos
+  manipulados: 'hub-pedidos', ortopedia: 'hub-pedidos', ervanaria: 'hub-pedidos',
+  veterinaria: 'hub-pedidos', outros: 'hub-pedidos', 'hub-pedidos': 'home',
+  orcamentos: 'manipulados', // "Orçamentos Conhecidos" abre-se a partir de Manipulados
+
+  // Stocks
+  erros: 'hub-stocks', recolhas: 'hub-stocks', calculadoras: 'hub-stocks',
+  validades: 'hub-stocks', 'hub-stocks': 'home',
+
+  // Gestão
+  reclamacoes: 'hub-gestao', eventos: 'hub-gestao', mapa48h: 'hub-gestao', 'hub-gestao': 'home',
+  'eventos-rastreio': 'eventos', 'eventos-conselheira': 'eventos', 'eventos-dia-especial': 'eventos',
+
+  // Entregas — item único, sem hub próprio
+  entregas: 'home',
+  'gestao-empresas-parceiras': 'entregas', // gerido a partir de Entregas
+
+  // Agendas
+  'hub-agendas': 'home', 'hub-agendas-nutricao': 'hub-agendas',
+
+  // Documentos
+  'hub-documentos': 'home',
+  'doc-despesas': 'hub-documentos', 'doc-presenca': 'hub-documentos', 'doc-avaliacao-fisica': 'hub-documentos',
+
+  // Equipa — os Lembretes tornaram-se uma área pessoal de destaque próprio
+  // na Página Inicial (sino de notificações), por isso voltam sempre
+  // diretamente à Home em vez de passar pelo hub de Equipa.
+  'hub-equipa': 'home', lembretes: 'home',
+  'mapa-tarefas': 'hub-equipa', formacoes: 'hub-equipa',
+  desafios: 'hub-equipa', objetivos: 'hub-equipa', 'historico-mensagens': 'hub-equipa',
+
+  // Lixo — item único, sem hub próprio
+  lixo: 'home',
+
+  // Definições
+  'hub-definicoes': 'home',
+  definicoes: 'hub-definicoes', seguranca: 'hub-definicoes', sobre: 'hub-definicoes',
+
+  // Chat — item único, sem hub próprio
+  chat: 'home',
+};
 function buildBackButton(goTo) {
-  let target = STATE.navFrom || 'home';
-  if (target === STATE.page) target = 'home';
+  // Navegação hierárquica estrita: nunca depende de por onde a pessoa
+  // veio (sem histórico do browser, sem STATE.navFrom) — vai sempre para o
+  // mesmo "pai" fixo desta página. Qualquer página sem entrada no mapa
+  // sobe diretamente à Página Inicial.
+  const target = PAGINA_PAI[STATE.page] || 'home';
   const btn = h('button', { class: 'back-btn', title: 'Voltar' }, [
     Icon('arrowleft', { size: 16, strokeWidth: 2.2 }),
     h('span', { class: 'back-btn-label' }, 'Voltar'),
   ]);
   btn.addEventListener('click', () => {
-    if (target === 'hub-pedidos') goTo('hub-pedidos', STATE.consultaState);
-    else goTo(target);
+    // Limpa qualquer sub-vista/estado temporário antes de forçar o módulo
+    // pai — só o hub de Pedidos precisa de repor a pesquisa anterior.
+    goTo(target, target === 'hub-pedidos' ? STATE.consultaState : undefined);
   });
   return btn;
 }
