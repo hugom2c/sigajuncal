@@ -1286,6 +1286,7 @@ const ICONS = {
   stethoscope: '<path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/>',
   heartPulseClock: '<circle cx="12" cy="12" r="9"/><path d="M7.5 12h2l1.3-2.6L12.5 15l1.3-3H16.5"/>',
   beachUmbrella: '<path d="M12 2v20"/><path d="M12 2a10 10 0 0 1 10 10H2A10 10 0 0 1 12 2Z"/><path d="M12 2a15 15 0 0 1 5 10"/><path d="M12 2a15 15 0 0 0-5 10"/><path d="M8 22h8"/>',
+  umbrella: '<path d="M22 12a10.06 10.06 0 0 0-20 0Z"/><path d="M12 12v8a2 2 0 0 0 4 0"/><path d="M12 2v1"/>',
   zap: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/>',
   truck: '<path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8Z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
   routeCheck: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><path d="m9 10 2 2 4-4"/>',
@@ -6621,6 +6622,7 @@ function buildReclamacoesPage(container, goTo) {
 const EVENTO_TIPOS = [
   { key: 'Rastreio', pageKey: 'eventos-rastreio', nome: 'Rastreios', icon: 'stethoscope', cor: '#38bdf8' },
   { key: 'Conselheira', pageKey: 'eventos-conselheira', nome: 'Dias de Conselheira', icon: 'tag', cor: '#f472b6' },
+  { key: 'DiaEspecial', pageKey: 'eventos-dia-especial', nome: 'Dias Especiais', icon: 'umbrella', cor: '#a855f7' },
 ];
 const SUBTIPOS_RASTREIO = ['Auditivo', 'Cardiovascular', 'Glicémia', 'Outro'];
 const INTERVALOS_VAGA_MIN = [10, 15, 20, 30, 45, 60];
@@ -6628,11 +6630,13 @@ const INTERVALOS_VAGA_MIN = [10, 15, 20, 30, 45, 60];
 function eventoLabel(ev) {
   if (ev.tipoEvento === 'Rastreio') return `Rastreio · ${ev.subtipoRastreio || '—'}`;
   if (ev.tipoEvento === 'Conselheira') return `Conselheira · ${ev.marcaConselheira || '—'}`;
+  if (ev.tipoEvento === 'DiaEspecial') return ev.titulo || 'Dia Especial';
   return ev.tipoEvento || 'Evento';
 }
 function eventoIconName(ev) {
   if (ev.tipoEvento === 'Rastreio') return 'stethoscope';
   if (ev.tipoEvento === 'Conselheira') return 'tag';
+  if (ev.tipoEvento === 'DiaEspecial') return 'umbrella';
   return 'star';
 }
 function eventoViewSchema(ev) {
@@ -6643,6 +6647,12 @@ function eventoViewSchema(ev) {
     schema.push({ name: 'marcaConselheira', label: 'Marca', type: 'text', size: 'sm' });
     schema.push({ name: 'campanha', label: 'Campanha', type: 'text', size: 'sm' });
     schema.push({ name: 'miniFaciais', label: 'Mini-Faciais', type: 'checkbox' });
+  } else if (ev.tipoEvento === 'DiaEspecial') {
+    schema.push({ name: 'titulo', label: 'Título da Iniciativa', type: 'text', col: 2 });
+    schema.push({ name: 'dataEvento', label: 'Data', type: 'date', size: 'xs' });
+    schema.push({ name: 'responsavel', label: 'Responsável', type: 'text', size: 'sm' });
+    schema.push({ name: 'notas', label: 'Descrição / Informação de Balcão', type: 'textarea', col: 2 });
+    return schema;
   }
   schema.push({ name: 'dataEvento', label: 'Data do Evento', type: 'date', size: 'xs' });
   schema.push({ name: 'horaInicial', label: 'Hora Inicial', type: 'text', size: 'xs' });
@@ -6763,6 +6773,96 @@ function buildEventoCalendarioCarrossel(tipo, onDayClick) {
    existir) ou grelha de vagas (Agenda-style: marcar, bloquear/
    desbloquear, confirmar, cancelar) — com secção extra de Mini-Faciais
    para Dias de Conselheira quando ativada. ---- */
+// Modal simplificado dos "Dias Especiais" — iniciativas/campanhas da
+// farmácia que NÃO têm marcações individuais de utentes, por isso não
+// mostram nenhuma grelha de vagas: só um formulário curto (Título, Data de
+// Início/Fim, Descrição, Responsável). Aberto ao clicar num dia no
+// calendário de Dias Especiais.
+function buildDiaEspecialModal(dateISO, evento, onSaved) {
+  const overlay = h('div', { class: 'modal-overlay' });
+  function close() { document.removeEventListener('keydown', onKeydown); overlay.remove(); }
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  function onKeydown(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKeydown);
+
+  const draft = evento
+    ? { titulo: evento.titulo || '', data: evento.dataEvento || dateISO, notas: evento.notas || '', responsavel: evento.responsavel || currentUserName() }
+    : { titulo: '', data: dateISO, notas: '', responsavel: currentUserName() };
+
+  const tituloInput = h('input', { class: 'input', placeholder: 'Ex: Oferta de Guarda-chuvas, Dia da Marca...', maxlength: '150' });
+  tituloInput.value = draft.titulo;
+  tituloInput.addEventListener('input', () => { draft.titulo = tituloInput.value; });
+
+  const dataInput = h('input', { class: 'input', type: 'date' });
+  dataInput.value = draft.data;
+  dataInput.addEventListener('change', () => { draft.data = dataInput.value; });
+
+  const descInput = h('textarea', { class: 'textarea', placeholder: 'Mecânica da promoção, regras da oferta, informação de balcão...', maxlength: '400' });
+  descInput.value = draft.notas;
+  descInput.addEventListener('input', () => { draft.notas = descInput.value; });
+
+  const respInput = h('input', { class: 'input', placeholder: 'Responsável', maxlength: '100' });
+  respInput.value = draft.responsavel;
+  respInput.addEventListener('input', () => { draft.responsavel = respInput.value; });
+
+  const grid = h('div', { class: 'form-grid' }, [
+    h('div', { class: 'field span2' }, [h('label', {}, 'Título da Iniciativa'), tituloInput]),
+    h('div', { class: 'field field-xs' }, [h('label', {}, 'Data'), dataInput]),
+    h('div', { class: 'field span2' }, [h('label', {}, 'Descrição / Informação de Balcão'), descInput]),
+    h('div', { class: 'field field-sm' }, [h('label', {}, 'Responsável'), respInput]),
+  ]);
+  attachFormEnterNavigation(grid, () => requireAuth(submit));
+
+  const errorEl = h('p', { class: 'form-error', style: 'display:none;' }, '');
+
+  async function submit() {
+    if (!String(draft.titulo || '').trim()) { errorEl.textContent = 'Por favor, indique o Título da Iniciativa.'; errorEl.style.display = ''; return; }
+    if (!draft.data) { errorEl.textContent = 'Por favor, indique a Data.'; errorEl.style.display = ''; return; }
+    errorEl.style.display = 'none';
+    saveBtn.disabled = true; saveBtn.textContent = 'A guardar…';
+    const payload = {
+      tipoEvento: 'DiaEspecial', titulo: draft.titulo, dataEvento: draft.data,
+      notas: draft.notas, responsavel: draft.responsavel || currentUserName(),
+    };
+    const resultado = evento ? await dbUpdate('eventos', evento.id, payload) : await dbInsert('eventos', payload);
+    if (resultado) {
+      STATE.eventos = evento ? STATE.eventos.map(e => e.id === evento.id ? resultado : e) : [resultado, ...STATE.eventos];
+      close();
+      if (onSaved) onSaved();
+    } else {
+      saveBtn.disabled = false; saveBtn.textContent = evento ? 'Guardar alterações' : 'Registar Iniciativa';
+      errorEl.textContent = `Não foi possível guardar. ${lastDbError || 'Verifique a ligação e tente novamente.'}`;
+      errorEl.style.display = '';
+    }
+  }
+  function eliminar() {
+    if (!evento) return;
+    confirmDialog('Eliminar esta iniciativa/campanha?', async () => {
+      const ok = await dbDelete('eventos', evento.id);
+      if (ok) { STATE.eventos = STATE.eventos.filter(e => e.id !== evento.id); close(); if (onSaved) onSaved(); }
+      else showDbErrorToast('Não foi possível eliminar');
+    }, { danger: true, confirmLabel: 'Eliminar' });
+  }
+
+  const saveBtn = h('button', { class: 'btn btn-primary', onclick: () => requireAuth(submit) }, evento ? 'Guardar alterações' : 'Registar Iniciativa');
+  const cancelBtn = h('button', { class: 'btn btn-secondary', onclick: close }, 'Cancelar');
+  const actions = [saveBtn, cancelBtn];
+  if (evento) {
+    const delBtn = h('button', { class: 'btn btn-secondary', style: 'color:var(--red);', onclick: () => requireAuth(eliminar) }, 'Eliminar');
+    actions.push(delBtn);
+  }
+
+  const panel = h('div', { class: 'modal-panel confirm-panel' }, [
+    h('p', { class: 'modal-title', style: 'margin-bottom:12px;' }, evento ? 'Editar Dia Especial' : 'Novo Dia Especial'),
+    grid,
+    errorEl,
+    h('div', { class: 'form-actions' }, actions),
+  ]);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
 function buildEventoDiaModal(tipo, dateISO, evento, onSaved) {
   const overlay = h('div', { class: 'modal-overlay' });
   function close() { overlay.remove(); }
@@ -7338,16 +7438,27 @@ function buildEventoDiaModal(tipo, dateISO, evento, onSaved) {
    abre a configuração ou a grelha de vagas desse dia) ---- */
 function buildEventoTipoPage(container, goTo, tipo) {
   const tipoInfo = EVENTO_TIPOS.find(t => t.key === tipo);
+  const ehDiaEspecial = tipo === 'DiaEspecial';
 
   function rerender() { clear(container); container.appendChild(build()); }
   function onDayClick(dateISO, isPast, ev) {
+    if (ehDiaEspecial) {
+      // Dias Especiais não têm vagas nem vista de histórico bloqueada —
+      // qualquer dia pode abrir o formulário simplificado, mesmo no
+      // passado, para consultar ou corrigir uma iniciativa já registada.
+      document.body.appendChild(buildDiaEspecialModal(dateISO, ev || null, rerender));
+      return;
+    }
     if (isPast && !ev) return; // dias passados sem evento não abrem nada
     document.body.appendChild(buildEventoDiaModal(tipo, dateISO, ev, rerender));
   }
 
   function build() {
     const wrap = h('div', { class: 'animate-in' });
-    wrap.appendChild(withBackButton(buildPageHeader(tipoInfo.icon, tipoInfo.nome, 'Calendário mensal — clique num dia para configurar ou consultar vagas.', undefined), goTo));
+    const subtitulo = ehDiaEspecial
+      ? 'Iniciativas e campanhas da farmácia (não sujeito a marcações de utentes).'
+      : 'Calendário mensal — clique num dia para configurar ou consultar vagas.';
+    wrap.appendChild(withBackButton(buildPageHeader(tipoInfo.icon, tipoInfo.nome, subtitulo, undefined), goTo));
     wrap.appendChild(buildEventoCalendarioCarrossel(tipo, onDayClick));
     return wrap;
   }
@@ -11600,6 +11711,7 @@ function render() {
       case 'eventos': buildEventosPage(pageContainer, goTo); break;
       case 'eventos-rastreio': buildEventoTipoPage(pageContainer, goTo, 'Rastreio'); break;
       case 'eventos-conselheira': buildEventoTipoPage(pageContainer, goTo, 'Conselheira'); break;
+      case 'eventos-dia-especial': buildEventoTipoPage(pageContainer, goTo, 'DiaEspecial'); break;
       case 'mapa48h': buildMapa48hPage(pageContainer, goTo); break;
       case 'mapa-tarefas': buildMapaTarefasPage(pageContainer, goTo); break;
       case 'entregas': buildEntregasPage(pageContainer, goTo); break;
